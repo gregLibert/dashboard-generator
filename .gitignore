@@ -1,0 +1,25 @@
+# --- Python & Build Artifacts ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- IDE Settings ---
+.vscode/
+.idea/
+
+# --- Output & Generated Files ---
+output/
+*.html
+
+# --- Local Test Scripts ---
+main_horizon.py
+test_many.py
+test_*.py
+
+# --- Mac OS junk ---
+.DS_Store
