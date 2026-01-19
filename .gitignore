@@ -18,7 +18,6 @@ output/
 # --- Local Test Scripts ---
 main_horizon.py
 test_many.py
-test_*.py
 
 # --- Mac OS junk ---
 .DS_Store
