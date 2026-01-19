@@ -1,51 +1,42 @@
 // ==========================================
-// SANKEY WIDGET (Interactif)
+// SANKEY WIDGET (Multi-Level Path)
 // ==========================================
 class SankeyWidget extends BaseWidget {
-    
-    // Surcharge de update pour gérer le filtrage interactif
+
     update() {
-        // Initialisation du filtre s'il n'existe pas encore dans l'état
         if (this.state.currentFilter === undefined) {
             this.state.currentFilter = null;
         }
 
         this.vizWrapper.innerHTML = '';
         const yearsToShow = this.state.yoy ? [this.state.year - 1, this.state.year] : [this.state.year];
-        
+
         yearsToShow.forEach(year => {
-            // 1. Filtrage Temporel (Année / Mois) via BaseWidget
+            // 1. Filtrage Temporel
             let data = this.getFilteredData(year);
 
             // 2. Filtrage Interactif (Drill-down)
             if (this.state.currentFilter) {
-                const val = this.state.currentFilter;
-                const { source, target } = this.config.mapping;
-                
-                // On ne garde que les lignes où la source OU la target correspond à la valeur cliquée
-                data = data.filter(row => 
-                    row[this.config.mapping[source]] === val ||
-                    row[this.config.mapping[target]] === val ||
-                    // Cas ou mapping direct (si le mapping contient directement le nom de colonne)
-                    row[source] === val || 
-                    row[target] === val ||
-                    // Gestion robuste : on vérifie les valeurs mappées
-                    Utils.getVal(row, 'source', this.config.mapping) === val ||
-                    Utils.getVal(row, 'target', this.config.mapping) === val
-                );
+                const filterVal = this.state.currentFilter;
+                // On récupère la liste des colonnes impliquées
+                const pathCols = this.config.mapping.path || [this.config.mapping.source, this.config.mapping.target];
+
+                // On garde la ligne si la valeur cherchée apparaît dans N'IMPORTE QUELLE colonne du path
+                data = data.filter(row => {
+                    return pathCols.some(col => row[col] === filterVal);
+                });
             }
 
-            // Préparation du conteneur DOM
             const container = document.createElement('div');
             container.className = 'sub-chart';
             
-            // Construction du titre avec indicateur de filtre
+            // Titre & Reset Filtre
             const label = Utils.labelForPeriod(this.state.periodType, year, this.state.periodValue);
             const suffix = (this.state.yoy && year === this.state.year) ? ' (N)' : (this.state.yoy ? ' (N-1)' : '');
             
             let htmlTitle = `<h4>${label}${suffix}`;
             if (this.state.currentFilter) {
-                htmlTitle += ` <span style="color:#b00020; font-size:0.8em; cursor:pointer;" title="Cliquez pour retirer le filtre">
+                htmlTitle += ` <span style="color:#b00020; font-size:0.8em; cursor:pointer;" title="Retirer le filtre">
                     (Filtre: ${this.state.currentFilter} ✖)
                 </span>`;
             }
@@ -53,8 +44,7 @@ class SankeyWidget extends BaseWidget {
 
             container.innerHTML = `${htmlTitle}<div style="width:100%; min-height:350px;"></div>`;
             this.vizWrapper.appendChild(container);
-            
-            // Gestion du clic sur le titre pour reset le filtre
+
             if(this.state.currentFilter) {
                 container.querySelector('h4 span').addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -62,9 +52,9 @@ class SankeyWidget extends BaseWidget {
                     this.update();
                 });
             }
-            
+
             if(data.length === 0) {
-                container.querySelector('div').innerHTML = '<p class="hint" style="text-align:center; padding-top:100px;">Aucune donnée pour ce filtre.</p>';
+                container.querySelector('div').innerHTML = '<p class="hint" style="text-align:center; padding-top:100px;">Aucune donnée.</p>';
                 return;
             }
 
@@ -73,41 +63,59 @@ class SankeyWidget extends BaseWidget {
     }
 
     drawSankey(domNode, data) {
-        const { source, target, value } = this.config.mapping;
-        
-        const width = 800; 
+        // Support rétro-compatible ou mode liste
+        const pathCols = this.config.mapping.path || [this.config.mapping.source, this.config.mapping.target];
+        const valCol = this.config.mapping.value;
+
+        const width = domNode.clientWidth || 800;
         const height = 400;
 
-        // --- Agrégation ---
-        const agg = d3.rollup(data, 
-            v => d3.sum(v, d => +d[value]), 
-            d => Utils.getVal(d, 'source', this.config.mapping), 
-            d => Utils.getVal(d, 'target', this.config.mapping)
-        );
+        // --- 1. Construction des Liens et Noeuds ---
+        const linksMap = new Map(); // Key: "SourceID->TargetID", Value: sum
+        const nodesMap = new Map(); // Key: "ID", Value: {name, layer}
 
-        const nodesSet = new Set();
-        const links = [];
-        
-        for (const [src, targets] of agg) {
-            if(!src) continue;
-            nodesSet.add(src);
-            for (const [tgt, val] of targets) {
-                if(!tgt) continue;
-                nodesSet.add(tgt);
-                if (val > 0) links.push({ source: src, target: tgt, value: val });
+        // Helper pour générer un ID unique par niveau (évite les cycles si "Visa" est à la fois en col 1 et 2)
+        const getNodeId = (val, colIndex) => `${val}##${colIndex}`;
+        const getNodeName = (id) => id.split('##')[0];
+
+        data.forEach(row => {
+            const val = +row[valCol] || 0;
+            if (val <= 0) return;
+
+            // On boucle sur le chemin: Col 0 -> Col 1, puis Col 1 -> Col 2...
+            for (let i = 0; i < pathCols.length - 1; i++) {
+                const srcRaw = row[pathCols[i]];
+                const tgtRaw = row[pathCols[i+1]];
+
+                if (!srcRaw || !tgtRaw) continue;
+
+                const srcId = getNodeId(srcRaw, i);
+                const tgtId = getNodeId(tgtRaw, i + 1);
+
+                // Enregistrement des noeuds
+                if (!nodesMap.has(srcId)) nodesMap.set(srcId, { id: srcId, name: srcRaw });
+                if (!nodesMap.has(tgtId)) nodesMap.set(tgtId, { id: tgtId, name: tgtRaw });
+
+                // Aggrégation du lien
+                const linkKey = `${srcId}->${tgtId}`;
+                const current = linksMap.get(linkKey) || { source: srcId, target: tgtId, value: 0 };
+                current.value += val;
+                linksMap.set(linkKey, current);
             }
-        }
-        
-        const nodes = Array.from(nodesSet).map(name => ({ name }));
-        
-        // --- Rendu SVG ---
+        });
+
+        const nodes = Array.from(nodesMap.values());
+        const links = Array.from(linksMap.values());
+
+        if (nodes.length === 0) return;
+
+        // --- 2. Rendu SVG ---
         const svg = d3.select(domNode).append("svg")
             .attr("viewBox", [0, 0, width, height])
-            .attr("preserveAspectRatio", "xMidYMid meet") 
             .style("width", "100%")
-            .style("height", "100%");
+            .style("height", "auto");
 
-        // Interaction : Clic sur le fond = Reset
+        // Click background = Reset
         svg.on("click", (e) => {
             if (e.target.tagName === 'svg') {
                 this.state.currentFilter = null;
@@ -115,37 +123,40 @@ class SankeyWidget extends BaseWidget {
             }
         });
 
-        if(nodes.length === 0) return;
-
         const color = d3.scaleOrdinal(d3.schemeTableau10);
+        
         const sankeyGen = sankey()
-            .nodeId(d => d.name)
+            .nodeId(d => d.id) // Important: on utilise l'ID unique (avec ##) pour la topo
             .nodeWidth(15)
             .nodePadding(15)
             .extent([[1, 5], [width - 1, height - 5]]);
 
+        // D3 modifie les objets links/nodes en place
         const graph = sankeyGen({ nodes, links });
 
-        // --- Liens ---
+        // --- Dessin des Liens ---
         svg.append("g")
             .attr("fill", "none")
-            .attr("stroke-opacity", 0.5)
+            .attr("stroke-opacity", 0.4)
             .selectAll("path")
             .data(graph.links)
             .join("path")
             .attr("d", sankeyLinkHorizontal())
-            .attr("stroke", d => color(d.source.name))
+            .attr("stroke", d => color(d.source.name)) // Couleur basée sur le nom propre
             .attr("stroke-width", d => Math.max(1, d.width))
+            .style("transition", "stroke-opacity 0.3s")
             .style("cursor", "pointer")
+            .on("mouseover", function() { d3.select(this).attr("stroke-opacity", 0.7); })
+            .on("mouseout", function() { d3.select(this).attr("stroke-opacity", 0.4); })
             .on("click", (e, d) => {
                 e.stopPropagation();
-                // Comportement original : clic sur lien = filtre sur la source
-                this.handleFilterChange(d.source.name);
+                // On filtre sur le nom réel de la source (ex: "Visa")
+                this.handleFilterChange(d.source.name); 
             })
             .append("title")
             .text(d => `${d.source.name} → ${d.target.name}\n${Utils.fmtNumber.format(d.value)}`);
 
-        // --- Noeuds ---
+        // --- Dessin des Noeuds ---
         svg.append("g")
             .selectAll("rect")
             .data(graph.nodes)
@@ -163,9 +174,9 @@ class SankeyWidget extends BaseWidget {
                 this.handleFilterChange(d.name);
             })
             .append("title")
-            .text(d => `${d.name}\nTotal: ${Utils.fmtNumber.format(d.value)}\n(Cliquez pour isoler)`);
+            .text(d => `${d.name}\nTotal: ${Utils.fmtNumber.format(d.value)}`);
 
-        // --- Labels ---
+        // --- Labels (Texte) ---
         svg.append("g")
             .attr("font-size", 10)
             .attr("font-family", "sans-serif")
@@ -177,15 +188,16 @@ class SankeyWidget extends BaseWidget {
             .attr("y", d => (d.y1 + d.y0) / 2)
             .attr("dy", "0.35em")
             .attr("text-anchor", d => d.x0 < width / 2 ? "start" : "end")
-            .text(d => d.name);
+            .text(d => d.name) // On affiche le nom propre ("Visa"), pas l'ID ("Visa##0")
+            .attr("font-weight", "bold")
+            .attr("fill", "#333");
     }
 
-    // Gestionnaire centralisé du changement de filtre
     handleFilterChange(newValue) {
         if (this.state.currentFilter === newValue) {
-            this.state.currentFilter = null; // Toggle off
+            this.state.currentFilter = null;
         } else {
-            this.state.currentFilter = newValue; // Toggle on
+            this.state.currentFilter = newValue;
         }
         this.update();
     }
