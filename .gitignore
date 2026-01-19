@@ -14,7 +14,6 @@ dist/
 
 # --- Output & Generated Files ---
 output/
-*.html
 
 # --- Local Test Scripts ---
 main_horizon.py
