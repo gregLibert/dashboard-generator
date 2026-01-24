@@ -26,5 +26,5 @@ dev = [
     "pytest-playwright",
     "pytest-cov",
     "coverage-badge",
-    "monocart-coverage-reports"
+    "anybadge"
 ]
