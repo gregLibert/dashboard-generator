@@ -8,10 +8,9 @@ version = "0.1.0"
 authors = [{name = "Gregory Libert"}]
 description = "Moteur de génération de dashboards D3"
 requires-python = ">=3.9"
-dependencies = [
-    "playwright",
-    "pytest",
 
+dependencies = [
+    "jinja2"
 ]
 
 [tool.setuptools.packages.find]
@@ -19,3 +18,12 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 dashboard_engine = ["assets/**/*"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "playwright",
+    "pytest-playwright",
+    "pytest-cov",
+    "coverage-badge"
+]
