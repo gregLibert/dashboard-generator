@@ -1,10 +1,20 @@
 // ==========================================
 // BASE WIDGET
 // ==========================================
+import showdown from "https://cdn.jsdelivr.net/npm/showdown@2.1.0/+esm";
+
 class BaseWidget {
     constructor(container, rawData, config) {
         this.container = container;
         this.config = config;
+
+        // Initialisation du convertisseur Markdown (Singleton lazy)
+        this.converter = new showdown.Converter({
+            simpleLineBreaks: true, 
+            openLinksInNewWindow: true,
+            emoji: true
+        });
+
         this.rawData = this.processData(rawData); 
         this.years = Array.from(new Set(this.rawData.map(d => d.year))).sort((a,b)=>a-b);
         
@@ -80,7 +90,10 @@ class BaseWidget {
         if (this.config.description) {
             const descDiv = document.createElement('div');
             descDiv.className = 'widget-description';
-            descDiv.innerHTML = this.config.description;
+
+            const htmlContent = this.converter.makeHtml(this.config.description);
+            descDiv.innerHTML = htmlContent;
+            
             // On s'assure qu'elle est cachée au démarrage (géré par le CSS, mais sécurité ici)
             descDiv.style.display = 'none'; 
             this.container.appendChild(descDiv);
@@ -196,4 +209,7 @@ class BaseWidget {
             return false;
         });
     }
+
+    // Méthode vide par défaut, à implémenter par les enfants
+    update() {}
 }
