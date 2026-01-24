@@ -12,12 +12,16 @@ dist/
 .vscode/
 .idea/
 
-# --- Output & Generated Files ---
-output/
-
-# --- Local Test Scripts ---
-main_horizon.py
-test_many.py
-
 # --- Mac OS junk ---
 .DS_Store
+
+# Environnement
+venv/
+.env
+
+# Tests & Output
+scripts/
+.pytest_cache/
+output/
+*.html
+!src/**/assets/*.html  # N'ignore pas tes squelettes HTML sources

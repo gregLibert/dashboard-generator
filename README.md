@@ -1,4 +1,8 @@
-# Simple Static Dashboard Generator
+# Dashboard Engine
+[![CI Status](https://github.com/TON_USER/TON_REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/TON_USER/TON_REPO/actions/workflows/ci.yml)
+[![Coverage](coverage.svg)](coverage.svg)
+
+A Simple Static Dashboard Generator
 
 ## 1. Objective
 
