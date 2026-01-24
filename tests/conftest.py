@@ -15,6 +15,9 @@ def js_coverage_global():
 
 @pytest.fixture(scope="function", autouse=True)
 def capture_js_coverage(page: Page, js_coverage_global):
+    """
+    Fixture automatique qui s'exécute autour de chaque test UI.
+    """
     # 1. Vérification du navigateur
     try:
         browser_name = page.context.browser.browser_type.name
@@ -25,43 +28,46 @@ def capture_js_coverage(page: Page, js_coverage_global):
         yield
         return
 
-    # 2. TENTATIVE D'ACCÈS DIRECT (Bypass hasattr)
-    try:
-        # On essaie d'accéder à la propriété. Si elle n'existe pas, ça lèvera une erreur ici.
-        cov_obj = page.coverage 
-        
-        # Si on arrive ici, c'est que l'objet existe ! On lance la couverture.
-        print(f"\n[DEBUG] ✅ API Coverage détectée. Démarrage...")
-        cov_obj.start_js_coverage(reset_on_navigation=False)
-        
-        yield # Exécution du test
-        
-        # Arrêt
-        print(f"[DEBUG] 🛑 Arrêt couverture...")
-        data = cov_obj.stop_js_coverage()
-        print(f"[DEBUG] 📥 Données reçues : {len(data)} entrées.")
-        js_coverage_global.extend(data)
+    # 2. Vérification de l'API (ou bypass CDP)
+    # Si page.coverage n'existe pas, on tente via CDP direct pour contourner le bug
+    if not hasattr(page, "coverage"):
+        # Tentative CDP direct
+        try:
+            session = page.context.new_cdp_session(page)
+            session.send("Profiler.enable")
+            session.send("Profiler.startPreciseCoverage", {"callCount": False, "detailed": True})
+            yield
+            res = session.send("Profiler.takePreciseCoverage")
+            session.send("Profiler.stopPreciseCoverage")
+            data = res.get("result", [])
+            js_coverage_global.extend(data)
+        except Exception:
+            yield
+        return
 
-    except AttributeError:
-        # C'est ici qu'on va comprendre ce qui se passe
-        print(f"\n[DEBUG] ❌ ERREUR FATALE : L'objet Page n'a pas d'attribut 'coverage'.")
-        print(f"[DEBUG] Type de l'objet page : {type(page)}")
-        print(f"[DEBUG] Liste des attributs disponibles sur 'page' :")
-        # On affiche les 20 premiers attributs pour voir à quoi on a affaire
-        print([attr for attr in dir(page) if not attr.startswith('_')][:20])
-        yield
-        
-    except Exception as e:
-        print(f"[DEBUG] ❌ Autre erreur imprévue : {e}")
-        yield
+    # 3. Démarrage Standard
+    coverage_started = False
+    try:
+        page.coverage.start_js_coverage(reset_on_navigation=False)
+        coverage_started = True
+    except Exception:
+        pass
+
+    yield # Exécution du test
+
+    # 4. Arrêt et Collecte
+    if coverage_started:
+        try:
+            coverage_data = page.coverage.stop_js_coverage()
+            js_coverage_global.extend(coverage_data)
+        except Exception:
+            pass
 
 @pytest.fixture(scope="session", autouse=True)
 def generate_js_report(js_coverage_global):
     yield # Attend la fin des tests
     
     total_entries = len(js_coverage_global)
-    print(f"\n[DEBUG] === FIN DE SESSION === Total entrées JS collectées : {total_entries}")
-
     if total_entries == 0:
         print("[DEBUG] 🛑 Arrêt : Aucune donnée à traiter.")
         return
@@ -69,47 +75,56 @@ def generate_js_report(js_coverage_global):
     # Sauvegarde JSON
     os.makedirs("output", exist_ok=True)
     raw_file = os.path.abspath("output/raw_v8_coverage.json")
-    print(f"[DEBUG] Écriture du fichier brut : {raw_file}")
     
     with open(raw_file, "w") as f:
         json.dump(js_coverage_global, f)
     
     # Appel Node.js
     node_script = os.path.abspath(os.path.join("scripts", "generate_js_coverage.js"))
-    print(f"[DEBUG] Lancement du script Node : {node_script}")
     
-    if not os.path.exists(node_script):
-        print(f"[DEBUG] ❌ Script introuvable !")
-        return
-
-    try:
-        # shell=True est souvent requis sous Windows pour trouver 'node' dans le PATH
-        result = subprocess.run(
-            ["node", node_script, raw_file], 
-            capture_output=True, 
-            text=True, 
-            shell=True if os.name == 'nt' else False
-        )
-        print("[DEBUG] Sortie Node.js (STDOUT) :\n", result.stdout)
-        if result.stderr:
-            print("[DEBUG] Erreur Node.js (STDERR) :\n", result.stderr)
-            
-    except Exception as e:
-        print(f"[DEBUG] ❌ Erreur appel subprocess : {e}")
+    if os.path.exists(node_script):
+        try:
+            # encoding='utf-8' pour éviter le crash cp1252 sur Windows
+            result = subprocess.run(
+                ["node", node_script, raw_file], 
+                capture_output=True, 
+                text=True, 
+                encoding='utf-8', 
+                shell=True if os.name == 'nt' else False
+            )
+            print("[DEBUG] Sortie Node.js :\n", result.stdout)
+            if result.stderr:
+                print("[DEBUG] Erreur Node.js :\n", result.stderr)
+                
+        except Exception as e:
+            print(f"[DEBUG] ❌ Erreur appel subprocess : {e}")
 
     # Badge Python
     summary_file = "output/js-coverage-summary.json"
     if os.path.exists(summary_file):
-        print("[DEBUG] Génération du badge SVG...")
         try:
             with open(summary_file, "r") as f:
-                summary = json.load(f)
-                pct = summary.get("pct", 0)
+                content = f.read()
+                # Debug : Voir ce que contient le fichier
+                print(f"[DEBUG] Contenu du résumé JS : '{content}'")
+                
+                if not content.strip():
+                    pct = 0.0
+                else:
+                    summary = json.loads(content)
+                    # Conversion robuste
+                    raw_pct = summary.get("pct", 0)
+                    pct = float(raw_pct) if raw_pct != "" else 0.0
+                
                 import anybadge
-                badge = anybadge.Badge(label='JS Coverage', value=f'{pct:.1f}%', default_color='gray', thresholds={50: 'red', 70: 'yellow', 90: 'green'})
+                badge = anybadge.Badge(
+                    label='JS Coverage', 
+                    value=f'{pct:.1f}%', 
+                    default_color='gray',
+                    thresholds={50: 'red', 70: 'yellow', 90: 'green'}
+                )
                 badge.write_badge('js-coverage.svg', overwrite=True)
-                print(f"[DEBUG] ✅ Badge créé avec succès ({pct:.1f}%)")
+                print(f"[DEBUG] ✅ Badge JS généré : {pct:.1f}% -> js-coverage.svg")
+                
         except Exception as e:
             print(f"[DEBUG] ❌ Erreur badge : {e}")
-    else:
-        print(f"[DEBUG] ❌ Fichier résumé introuvable : {summary_file}")
