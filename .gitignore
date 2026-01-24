@@ -8,6 +8,9 @@ dist/
 *.egg-info/
 .eggs/
 
+# --- JS ---
+node_modules/
+
 # --- IDE Settings ---
 .vscode/
 .idea/
@@ -20,7 +23,6 @@ venv/
 .env
 
 # Tests & Output
-scripts/
 .pytest_cache/
 output/
 *.html

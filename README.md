@@ -1,6 +1,7 @@
 # Dashboard Engine
-[![CI Status](https://github.com/TON_USER/TON_REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/TON_USER/TON_REPO/actions/workflows/ci.yml)
-[![Coverage](coverage.svg)](coverage.svg)
+[![CI Status](https://github.com/gregLibert/dashboard-generator/actions/workflows/ci.yml/badge.svg)](https://github.com/gregLibert/dashboard-generator/actions/workflows/ci.yml)
+[![Python Coverage](coverage.svg)](coverage.svg)
+[![JS Coverage](js-coverage.svg)](output/coverage-js/index.html)
 
 A Simple Static Dashboard Generator
 
