@@ -52,7 +52,7 @@ jobs:
       uses: stefanzweifel/git-auto-commit-action@v5
       with:
         commit_message: "chore: update coverage badges [skip ci]"
-        file_pattern: *.svg
+        file_pattern: "*.svg"
 
     - uses: actions/upload-artifact@v4
       if: failure()
