@@ -25,7 +25,7 @@ The dashboard is defined by a JSON configuration dictionary. Below are the avail
 | --- | --- | --- |
 | `type` | String | The widget ID (e.g., `sankey`, `sunburst`). |
 | `title` | String | The header title of the chart card. |
-| `description` | HTML String | *(Optional)* Contextual info, source details, or filter rules displayed via an info icon. |
+| `description` | Markdown String | *(Optional)* Contextual info, source details, or filter rules displayed via an info icon. |
 | `datasetIndex` | Integer | The index of the CSV string passed to the generator (0, 1, 2...). |
 
 ---
@@ -33,7 +33,6 @@ The dashboard is defined by a JSON configuration dictionary. Below are the avail
 ### A. Sankey Diagram (`sankey`)
 
 Standard flow visualization for source-to-destination logic.
-
 ```json
 {
   "type": "sankey",
@@ -41,12 +40,10 @@ Standard flow visualization for source-to-destination logic.
   "datasetIndex": 0,
   "mapping": {
     "date": "month_year",  // Column for time filtering
-    "source": "origin",    // Column for source node
-    "target": "destination", // Column for target node
+    "path": ["<col1>", "<col2>", "<col3>"],    // Column for node ordering
     "value": "count"       // Column for link width
   }
 }
-
 ```
 
 ### B. Financial Sankey (`financial_sankey`)
@@ -68,7 +65,6 @@ Specialized Sankey for Income Statements (Waterfall logic). Colors are auto-assi
     "type": "category_type" // Must contain 'input', 'cost', or 'profit'
   }
 }
-
 ```
 
 ### C. Sunburst (`sunburst`)
@@ -94,7 +90,7 @@ Zoomable hierarchical pie chart. Supports Logarithmic scale for disparate data v
 
 ### D. Evolution Chart (`evolution`)
 
-Multi-line time-series chart with comparison features.
+Time-series chart with comparison features.
 
 ```json
 {
@@ -104,7 +100,6 @@ Multi-line time-series chart with comparison features.
   "mapping": {
     "date": "date_col",
     "value": "metric",
-    "category": "group_col" // Creates one line per category
   }
 }
 
