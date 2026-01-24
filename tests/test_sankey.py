@@ -6,9 +6,7 @@ from playwright.sync_api import Page, expect
 
 # --- 1. Gestion des imports du projet ---
 # On remonte à la racine pour trouver 'dashboard_engine'
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+from dashboard_engine.generator import DashboardGenerator
 
 # Import du vrai moteur (il faut que ce module existe dans ton projet)
 try:

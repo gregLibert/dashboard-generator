@@ -9,12 +9,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-try:
-    from dashboard_engine.generator import DashboardGenerator
-except ImportError:
-    # Mock pour éviter les erreurs d'import si le fichier n'est pas présent
-    class DashboardGenerator:
-        pass
+from dashboard_engine.generator import DashboardGenerator
 
 # --- 2. Configuration des données ---
 
