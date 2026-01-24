@@ -10,123 +10,106 @@ from playwright.sync_api import Page
 
 @pytest.fixture(scope="session")
 def js_coverage_global():
-    """
-    Conteneur global (liste) pour accumuler les données de couverture brute 
-    de tous les tests exécutés durant la session.
-    """
+    print("\n[DEBUG] Initialisation du conteneur global de couverture.")
     return []
 
 @pytest.fixture(scope="function", autouse=True)
 def capture_js_coverage(page: Page, js_coverage_global):
-    """
-    Fixture automatique qui s'exécute autour de chaque test UI.
-    Elle active la couverture JS (V8) si le navigateur est compatible (Chromium).
-    """
-    # --- 1. Vérifications de compatibilité ---
-    
-    # La couverture V8 ne fonctionne que sur Chromium (Chrome/Edge).
-    # Firefox et WebKit n'ont pas cette API exposée via Playwright.
+    # 1. Vérification du navigateur
     try:
         browser_name = page.context.browser.browser_type.name
         if browser_name != "chromium":
-            # Si ce n'est pas Chromium, on exécute le test sans couverture
             yield
             return
     except Exception:
-        # Si on n'arrive pas à déterminer le navigateur, on skip la couverture par sécurité
         yield
         return
 
-    # Vérification que l'objet page possède bien l'attribut coverage
-    if not hasattr(page, "coverage"):
-        print(f"⚠️ Attention: L'API 'page.coverage' n'est pas disponible.")
-        yield
-        return
-
-    # --- 2. Démarrage de la couverture ---
-    coverage_started = False
+    # 2. TENTATIVE D'ACCÈS DIRECT (Bypass hasattr)
     try:
-        # reset_on_navigation=False est vital pour les SPA ou si le JS s'exécute au chargement
-        page.coverage.start_js_coverage(reset_on_navigation=False)
-        coverage_started = True
+        # On essaie d'accéder à la propriété. Si elle n'existe pas, ça lèvera une erreur ici.
+        cov_obj = page.coverage 
+        
+        # Si on arrive ici, c'est que l'objet existe ! On lance la couverture.
+        print(f"\n[DEBUG] ✅ API Coverage détectée. Démarrage...")
+        cov_obj.start_js_coverage(reset_on_navigation=False)
+        
+        yield # Exécution du test
+        
+        # Arrêt
+        print(f"[DEBUG] 🛑 Arrêt couverture...")
+        data = cov_obj.stop_js_coverage()
+        print(f"[DEBUG] 📥 Données reçues : {len(data)} entrées.")
+        js_coverage_global.extend(data)
+
+    except AttributeError:
+        # C'est ici qu'on va comprendre ce qui se passe
+        print(f"\n[DEBUG] ❌ ERREUR FATALE : L'objet Page n'a pas d'attribut 'coverage'.")
+        print(f"[DEBUG] Type de l'objet page : {type(page)}")
+        print(f"[DEBUG] Liste des attributs disponibles sur 'page' :")
+        # On affiche les 20 premiers attributs pour voir à quoi on a affaire
+        print([attr for attr in dir(page) if not attr.startswith('_')][:20])
+        yield
+        
     except Exception as e:
-        print(f"⚠️ Impossible de démarrer la couverture JS : {e}")
-
-    # --- 3. Exécution du Test ---
-    yield
-
-    # --- 4. Arrêt et Collecte ---
-    if coverage_started:
-        try:
-            coverage_data = page.coverage.stop_js_coverage()
-            js_coverage_global.extend(coverage_data)
-        except Exception as e:
-            print(f"⚠️ Erreur lors de l'arrêt de la couverture JS : {e}")
+        print(f"[DEBUG] ❌ Autre erreur imprévue : {e}")
+        yield
 
 @pytest.fixture(scope="session", autouse=True)
 def generate_js_report(js_coverage_global):
-    """
-    S'exécute une seule fois à la fin de TOUTE la session de test.
-    Sauvegarde les données, appelle le script Node.js pour le HTML, et génère le badge SVG.
-    """
-    yield # Attend la fin de tous les tests
+    yield # Attend la fin des tests
     
-    # Si aucune donnée n'a été collectée (ex: tests lancés sur Firefox), on arrête là.
-    if not js_coverage_global:
-        print("\nℹ️ Aucune donnée de couverture JS collectée (Navigateur non-Chromium ?)")
+    total_entries = len(js_coverage_global)
+    print(f"\n[DEBUG] === FIN DE SESSION === Total entrées JS collectées : {total_entries}")
+
+    if total_entries == 0:
+        print("[DEBUG] 🛑 Arrêt : Aucune donnée à traiter.")
         return
 
-    # 1. Sauvegarder les données brutes dans un fichier temporaire
+    # Sauvegarde JSON
     os.makedirs("output", exist_ok=True)
-    raw_file = "output/raw_v8_coverage.json"
+    raw_file = os.path.abspath("output/raw_v8_coverage.json")
+    print(f"[DEBUG] Écriture du fichier brut : {raw_file}")
     
-    try:
-        with open(raw_file, "w") as f:
-            json.dump(js_coverage_global, f)
-    except IOError as e:
-        print(f"❌ Erreur d'écriture du fichier raw coverage : {e}")
-        return
+    with open(raw_file, "w") as f:
+        json.dump(js_coverage_global, f)
     
-    # 2. Appeler le script Node pour générer le rapport HTML
-    # On suppose que le script est dans 'scripts/generate_js_coverage.js' à la racine
-    print("\n📊 Génération du rapport de couverture JS (via Node.js)...")
-    node_script = os.path.join("scripts", "generate_js_coverage.js")
+    # Appel Node.js
+    node_script = os.path.abspath(os.path.join("scripts", "generate_js_coverage.js"))
+    print(f"[DEBUG] Lancement du script Node : {node_script}")
     
     if not os.path.exists(node_script):
-        print(f"⚠️ Script de génération introuvable : {node_script}")
+        print(f"[DEBUG] ❌ Script introuvable !")
         return
 
     try:
-        # On appelle node en passant le chemin du fichier brut
-        subprocess.run(["node", node_script, raw_file], check=True, shell=True if os.name == 'nt' else False)
-    except subprocess.CalledProcessError:
-        print("❌ Erreur lors de l'exécution du script Node.js (vérifiez 'npm install').")
-        return
-    except FileNotFoundError:
-        print("⚠️ Node.js n'est pas installé dans l'environnement.")
-        return
+        # shell=True est souvent requis sous Windows pour trouver 'node' dans le PATH
+        result = subprocess.run(
+            ["node", node_script, raw_file], 
+            capture_output=True, 
+            text=True, 
+            shell=True if os.name == 'nt' else False
+        )
+        print("[DEBUG] Sortie Node.js (STDOUT) :\n", result.stdout)
+        if result.stderr:
+            print("[DEBUG] Erreur Node.js (STDERR) :\n", result.stderr)
+            
+    except Exception as e:
+        print(f"[DEBUG] ❌ Erreur appel subprocess : {e}")
 
-    # 3. Générer le Badge SVG via Python (anybadge)
-    # On lit le résumé JSON généré par le script Node.js
+    # Badge Python
     summary_file = "output/js-coverage-summary.json"
     if os.path.exists(summary_file):
+        print("[DEBUG] Génération du badge SVG...")
         try:
             with open(summary_file, "r") as f:
                 summary = json.load(f)
                 pct = summary.get("pct", 0)
-                
-                # Import dynamique pour ne pas planter si anybadge manque
                 import anybadge
-                badge = anybadge.Badge(
-                    label='JS Coverage', 
-                    value=f'{pct:.1f}%', 
-                    default_color='gray',
-                    thresholds={50: 'red', 70: 'yellow', 90: 'green'}
-                )
+                badge = anybadge.Badge(label='JS Coverage', value=f'{pct:.1f}%', default_color='gray', thresholds={50: 'red', 70: 'yellow', 90: 'green'})
                 badge.write_badge('js-coverage.svg', overwrite=True)
-                print(f"✅ Badge JS généré : {pct:.1f}% -> js-coverage.svg")
-                
-        except (ImportError, Exception) as e:
-            print(f"⚠️ Impossible de générer le badge JS : {e}")
+                print(f"[DEBUG] ✅ Badge créé avec succès ({pct:.1f}%)")
+        except Exception as e:
+            print(f"[DEBUG] ❌ Erreur badge : {e}")
     else:
-        print(f"⚠️ Fichier résumé introuvable ({summary_file}), pas de badge généré.")
+        print(f"[DEBUG] ❌ Fichier résumé introuvable : {summary_file}")
