@@ -47,6 +47,14 @@ jobs:
       run: |
         coverage-badge -o coverage.svg -f
 
+    - name: Upload JS Coverage Report
+      if: always() # On le veut même si les tests échouent
+      uses: actions/upload-artifact@v4
+      with:
+        name: js-coverage-report
+        path: output/coverage-js/
+        retention-days: 7
+
     - name: Commit Coverage Badge
       if: github.ref == 'refs/heads/main'
       uses: stefanzweifel/git-auto-commit-action@v5

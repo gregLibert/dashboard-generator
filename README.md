@@ -1,7 +1,7 @@
 # Dashboard Engine
 [![CI Status](https://github.com/gregLibert/dashboard-generator/actions/workflows/ci.yml/badge.svg)](https://github.com/gregLibert/dashboard-generator/actions/workflows/ci.yml)
 [![Python Coverage](coverage.svg)](coverage.svg)
-[![JS Coverage](js-coverage.svg)](output/coverage-js/index.html)
+[![JS Coverage](js-coverage.svg)](https://github.com/gregLibert/dashboard-generator/actions)
 
 A Simple Static Dashboard Generator
 
