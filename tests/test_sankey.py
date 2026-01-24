@@ -5,22 +5,11 @@ import pytest
 from playwright.sync_api import Page, expect
 
 # --- 1. Gestion des imports du projet ---
-# On remonte à la racine pour trouver 'dashboard_engine'
-from dashboard_engine.generator import DashboardGenerator
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
-# Import du vrai moteur (il faut que ce module existe dans ton projet)
-try:
-    from dashboard_engine.generator import DashboardGenerator
-except ImportError:
-    # Fallback pour l'exemple si le fichier n'est pas dans la structure exacte
-    print("⚠️ Module dashboard_engine non trouvé. Assurez-vous d'être à la racine du projet.")
-    # Pour que le code ci-dessous ne plante pas à l'import, on simule (A RETIRER EN PROD)
-    class DashboardGenerator:
-        def generate(self, config, datasets):
-            # Simulation : Retourne le HTML brut fourni dans ton premier prompt
-            # En situation réelle, cette classe est importée et non redéfinie
-            return "<html>... (Le vrai contenu HTML généré par ta classe) ...</html>"
-            pass
+from dashboard_engine.generator import DashboardGenerator
 
 # --- 2. Configuration des données de test ---
 
