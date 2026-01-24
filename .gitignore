@@ -24,7 +24,12 @@ venv/
 
 # Tests & Output
 .pytest_cache/
-output/
+
+output/**
+!output/coverage-js
+
 *.html
- # N'ignore pas tes squelettes HTML sources
 !src/**/assets/*.html
+!output/coverage-js/**/*.html
+
+!output/coverage-js/**
