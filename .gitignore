@@ -28,3 +28,4 @@ output/
 *.html
  # N'ignore pas tes squelettes HTML sources
 !src/**/assets/*.html
+*.svg
