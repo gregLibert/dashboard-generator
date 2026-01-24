@@ -24,4 +24,5 @@ scripts/
 .pytest_cache/
 output/
 *.html
-!src/**/assets/*.html  # N'ignore pas tes squelettes HTML sources
+ # N'ignore pas tes squelettes HTML sources
+!src/**/assets/*.html
