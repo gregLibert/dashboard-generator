@@ -3,6 +3,12 @@
 // ==========================================
 class SankeyWidget extends BaseWidget {
     
+    initLayout() {
+        this.colorScale = d3.scaleOrdinal(d3.schemeTableau10);
+
+        super.initLayout();
+    }
+
     update() {
         if (this.state.currentFilter === undefined) {
             this.state.currentFilter = null;
@@ -17,10 +23,7 @@ class SankeyWidget extends BaseWidget {
             // 1. Filtrage Interactif Multi-Colonnes
             if (this.state.currentFilter) {
                 const val = this.state.currentFilter;
-                // On récupère le chemin (path) ou on fallback sur source/target
                 const pathCols = this.config.mapping.path || [this.config.mapping.source, this.config.mapping.target];
-                
-                // On garde la ligne si la valeur est présente dans n'importe quelle colonne du flux
                 data = data.filter(row => pathCols.some(col => row[col] === val));
             }
 
@@ -59,18 +62,16 @@ class SankeyWidget extends BaseWidget {
     }
 
     drawSankey(domNode, data) {
-        // Configuration du mapping
         const pathCols = this.config.mapping.path || [this.config.mapping.source, this.config.mapping.target];
         const valueCol = this.config.mapping.value;
         
         const width = 800; 
         const height = 400;
 
-        // --- 1. Génération dynamique des Noeuds et Liens (Chainage) ---
+        // --- 1. Génération dynamique des Noeuds et Liens ---
         const nodesMap = new Map();
         const linksMap = new Map();
 
-        // Helper pour garantir l'unicité des noms par niveau (évite les boucles D3)
         const getNodeId = (name, level) => `${name}##${level}`;
         const getNameFromId = (id) => id.split('##')[0];
 
@@ -78,7 +79,6 @@ class SankeyWidget extends BaseWidget {
             const val = +row[valueCol] || 0;
             if (val <= 0) return;
 
-            // On parcourt le "path" pour créer des paires Source -> Target
             for (let i = 0; i < pathCols.length - 1; i++) {
                 const srcName = row[pathCols[i]];
                 const tgtName = row[pathCols[i+1]];
@@ -88,11 +88,9 @@ class SankeyWidget extends BaseWidget {
                 const srcId = getNodeId(srcName, i);
                 const tgtId = getNodeId(tgtName, i + 1);
 
-                // Enregistrement des Noeuds
                 if (!nodesMap.has(srcId)) nodesMap.set(srcId, { id: srcId, name: srcName });
                 if (!nodesMap.has(tgtId)) nodesMap.set(tgtId, { id: tgtId, name: tgtName });
 
-                // Aggrégation des Liens
                 const linkKey = `${srcId}->${tgtId}`;
                 if (!linksMap.has(linkKey)) {
                     linksMap.set(linkKey, { source: srcId, target: tgtId, value: 0 });
@@ -104,7 +102,7 @@ class SankeyWidget extends BaseWidget {
         const nodes = Array.from(nodesMap.values());
         const links = Array.from(linksMap.values());
         
-        // --- 2. Rendu SVG (Conservation stricte de ton style) ---
+        // --- 2. Rendu SVG ---
         const svg = d3.select(domNode).append("svg")
             .attr("viewBox", [0, 0, width, height])
             .attr("preserveAspectRatio", "xMidYMid meet") 
@@ -120,14 +118,21 @@ class SankeyWidget extends BaseWidget {
 
         if(nodes.length === 0) return;
 
-        const color = d3.scaleOrdinal(d3.schemeTableau10);
         const sankeyGen = sankey()
-            .nodeId(d => d.id) // On utilise l'ID technique pour D3
+            .nodeId(d => d.id)
             .nodeWidth(15)
             .nodePadding(15)
             .extent([[1, 5], [width - 1, height - 5]]);
 
         const graph = sankeyGen({ nodes, links });
+
+        // MODIF: Calcul des totaux par niveau (basé sur x0) pour le pourcentage
+        const levelTotals = new Map();
+        graph.nodes.forEach(n => {
+            // On arrondit x0 pour regrouper les noeuds alignés verticalement
+            const levelKey = Math.round(n.x0); 
+            levelTotals.set(levelKey, (levelTotals.get(levelKey) || 0) + n.value);
+        });
 
         // --- Liens ---
         svg.append("g")
@@ -137,7 +142,8 @@ class SankeyWidget extends BaseWidget {
             .data(graph.links)
             .join("path")
             .attr("d", sankeyLinkHorizontal())
-            .attr("stroke", d => color(getNameFromId(d.source.id)))
+            // MODIF: Utilisation de this.colorScale stable
+            .attr("stroke", d => this.colorScale(getNameFromId(d.source.id)))
             .attr("stroke-width", d => Math.max(1, d.width))
             .style("cursor", "pointer")
             .on("click", (e, d) => {
@@ -156,7 +162,8 @@ class SankeyWidget extends BaseWidget {
             .attr("y", d => d.y0)
             .attr("height", d => d.y1 - d.y0)
             .attr("width", d => d.x1 - d.x0)
-            .attr("fill", d => color(d.name))
+            // MODIF: Utilisation de this.colorScale stable
+            .attr("fill", d => this.colorScale(d.name))
             .attr("stroke", "#000")
             .attr("stroke-opacity", 0.1)
             .style("cursor", "pointer")
@@ -165,7 +172,12 @@ class SankeyWidget extends BaseWidget {
                 this.handleFilterChange(d.name);
             })
             .append("title")
-            .text(d => `${d.name}\nTotal: ${Utils.fmtNumber.format(d.value)}\n(Cliquez pour isoler)`);
+            // MODIF: Affichage du pourcentage relatif au niveau
+            .text(d => {
+                const totalLevel = levelTotals.get(Math.round(d.x0)) || d.value;
+                const pct = totalLevel > 0 ? ((d.value / totalLevel) * 100).toFixed(1) : 0;
+                return `${d.name}\nTotal: ${Utils.fmtNumber.format(d.value)} (${pct}%)\n(Cliquez pour isoler)`;
+            });
 
         // --- Labels ---
         svg.append("g")
