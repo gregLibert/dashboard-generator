@@ -1,5 +1,5 @@
 // ==========================================
-// ZOOMABLE SUNBURST WIDGET 
+// ZOOMABLE SUNBURST WIDGET
 // ==========================================
 class SunburstWidget extends BaseWidget {
 
@@ -13,15 +13,17 @@ class SunburstWidget extends BaseWidget {
         this.vizWrapper.parentNode.insertBefore(this.breadcrumbDiv, this.vizWrapper);
         
         this.chartControllers = [];
+
+        // FIX COULEUR : Initialisation unique de l'échelle de couleur.
+        // Utilisation de schemePaired pour avoir 12 couleurs distinctes et stables.
+        this.colorScale = d3.scaleOrdinal(d3.schemePaired);
     }
 
     update() {
         this.vizWrapper.innerHTML = '';
         this.chartControllers = [];
         this.updateBreadcrumbs(['Total']);
-
-        const useLogScale = this.config.options?.useLogScale || false;
-
+        
         const yearsToShow = this.state.yoy ? [this.state.year - 1, this.state.year] : [this.state.year];
 
         yearsToShow.forEach(year => {
@@ -32,12 +34,8 @@ class SunburstWidget extends BaseWidget {
             const label = Utils.labelForPeriod(this.state.periodType, year, this.state.periodValue);
             const suffix = (this.state.yoy && year === this.state.year) ? ' (N)' : (this.state.yoy ? ' (N-1)' : '');
 
-            const logIndicator = useLogScale 
-                ? '<span class="log-svg" title="Échelle Logarithmique (‰)" style="color:#6a1b9a; background:#f3e5f5; padding:2px; border-radius:4px; display:inline-flex; align-items:center; margin-left:6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/></svg></span>'
-                : '';
-
             container.innerHTML = `<h4 style="display:flex; justify-content:center; align-items:center;">
-                ${label}${suffix}${logIndicator}
+                ${label}${suffix}
             </h4>
             <div class="sunburst-container" style="height:400px; display:flex; justify-content:center; align-items:center;"></div>`;
             
@@ -81,13 +79,12 @@ class SunburstWidget extends BaseWidget {
 
     drawZoomableSunburst(domNode, data) {
         const { hierarchy, value } = this.config.mapping;
-        const useLogScale = this.config.options?.useLogScale || false;
-
+        
         const width = 400; 
         const height = 400;
         const radius = width / 6;
 
-        // --- Data Preparation ---
+        // 1. Préparation des données brutes
         const rolls = d3.rollup(data, 
             v => d3.sum(v, d => +d[value]), 
             ...hierarchy.map(col => d => d[col] || "N/A")
@@ -101,34 +98,19 @@ class SunburstWidget extends BaseWidget {
         const treeData = makeTree("Total", rolls);
         const root = d3.hierarchy(treeData);
 
-        // Pre-calculate Linear Values (Real Sums) for Tooltips
-        root.eachAfter(d => {
-            if (d.children) {
-                d.linearValue = d3.sum(d.children, c => c.linearValue);
-            } else {
-                d.linearValue = d.data.value; 
-            }
-        });
+        // 2. Calcul Standard (Linéaire)
+        // root.sum parcourt l'arbre et additionne les valeurs des enfants pour chaque parent.
+        root.sum(d => d.value);
 
-        const totalValue = root.linearValue;
-
-        // Apply Scale (Log or Linear) for Visual Sizing
-        if (useLogScale) {
-            root.sum(d => d.value ? Math.log(d.value + 1) : 0);
-        } else {
-            root.sum(d => d.value);
-        }
-
+        // Tri par valeur descendante pour placer les plus gros éléments à "midi"
         root.sort((a, b) => b.value - a.value);
 
         const partition = d3.partition().size([2 * Math.PI, root.height + 1]);
         root.each(d => d.current = d); 
         partition(root);
 
-        // --- COLOR LOGIC CHANGE ---
-        // Using schemePaired (12 colors) to support more distinct categories
-        const color = d3.scaleOrdinal(d3.schemePaired);
         const format = Utils.fmtNumber;
+        const totalValue = root.value; // La valeur totale est maintenant directement accessible
 
         const svg = d3.select(domNode).append("svg")
             .attr("viewBox", [-width / 2, -height / 2, width, height])
@@ -146,17 +128,11 @@ class SunburstWidget extends BaseWidget {
             .selectAll("path")
             .data(root.descendants().slice(1)) 
             .join("path")
-            .attr("fill", d => { 
-                // --- NEW COLOR STRATEGY ---
-                // We use the node's name directly. 
-                // "Credit" will be the same color regardless of its parent (Visa or MasterCard)
-                return color(d.data.name); 
-            })
+            // Couleur stable via l'instance créée dans initLayout
+            .attr("fill", d => this.colorScale(d.data.name)) 
             .attr("fill-opacity", d => arcVisible(d.current) ? (d.children ? 0.8 : 0.6) : 0)
             .attr("pointer-events", d => arcVisible(d.current) ? "auto" : "none")
             .attr("d", d => arc(d.current))
-            // Adding a white stroke is crucial when colors are not hierarchical
-            // to distinguish adjacent slices
             .attr("stroke", "white")
             .attr("stroke-width", "1px");
 
@@ -167,28 +143,16 @@ class SunburstWidget extends BaseWidget {
                 this.broadcastZoom(pathNames);
             });
 
-        // --- TOOLTIP UPDATE (Per Mille support) ---
+        // Tooltip : Simple et précis (Linéaire uniquement)
         path.append("title")
             .text(d => {
-                const pathStr = d.ancestors().reverse()
-                    .slice(1) 
-                    .map(n => n.data.name)
-                    .join(" > ");
+                const pathStr = d.ancestors().reverse().slice(1).map(n => n.data.name).join(" > ");
+                const realVal = d.value; // d.value est ici la vraie valeur linéaire
                 
-                const realVal = d.linearValue;
-                
-                // Logic: Log Scale -> Permille (‰), Linear -> Percent (%)
                 let ratioStr = "";
                 if (totalValue > 0) {
-                    if (useLogScale) {
-                        // Per mille calculation
-                        const pm = (realVal / totalValue) * 1000;
-                        ratioStr = `${pm.toFixed(1)}‰`;
-                    } else {
-                        // Percent calculation
-                        const pct = (realVal / totalValue) * 100;
-                        ratioStr = `${pct.toFixed(1)}%`;
-                    }
+                    const pct = (realVal / totalValue) * 100;
+                    ratioStr = `${pct.toFixed(1)}%`;
                 } else {
                     ratioStr = "0%";
                 }
@@ -219,7 +183,7 @@ class SunburstWidget extends BaseWidget {
                 this.broadcastZoom(pathNames);
             });
 
-        // --- Internal Transition Engine ---
+        // Transition interne (Animation Zoom)
         const internalTransition = (targetNode) => {
             parent.datum(targetNode.parent || root);
 
