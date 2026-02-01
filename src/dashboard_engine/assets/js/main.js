@@ -8,7 +8,8 @@ const WidgetRegistry = {
     'evolution': EvolutionWidget,
     'sunburst': SunburstWidget,
     'horizon': HorizonWidget,
-    'financial_sankey': FinancialSankeyWidget
+    'financial_sankey': FinancialSankeyWidget,
+    'nested_treemap': NestedTreemapWidget,
 };
 
 async function init() {

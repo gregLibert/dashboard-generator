@@ -39,6 +39,7 @@ class DashboardGenerator(object):
             'js/evolution_widget.js',
             'js/sunburst_widget.js',
             'js/horizon_widget.js',
+            'js/treemap_widget.js',
             'js/main.js'
         ]
         
