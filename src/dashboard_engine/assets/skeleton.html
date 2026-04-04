@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ title }}</title>
     
-    {% for csv in datasets %}
-    <script id="dataset-{{ loop.index0 }}" type="text/csv">
-{{ csv }}
+    {% for ds in datasets %}
+    <script id="dataset-{{ loop.index0 }}" type="text/csv"{% if ds.encoding %} data-csv-encoding="{{ ds.encoding }}"{% endif %}>
+{{ ds.payload }}
     </script>
     {% endfor %}
 

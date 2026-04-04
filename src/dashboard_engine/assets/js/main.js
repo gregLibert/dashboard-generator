@@ -37,18 +37,36 @@ const APP_CONSTANTS = {
     WIDGET_CRASH_EVENT: 'WidgetCrash',
 };
 
-const WidgetRegistry = {
-    'sankey': SankeyWidget,
-    'evolution': EvolutionWidget,
-    'sunburst': SunburstWidget,
-    'horizon': HorizonWidget,
-    'financial_sankey': FinancialSankeyWidget,
-    'nested_treemap': NestedTreemapWidget,
-    'stacked_area': StackedAreaWidget,
-    'bubble': BubbleWidget,
-    'heatmap': HeatmapWidget,
-    'radial_area': RadialAreaWidget,
-};
+/**
+ * Resolve widget constructor for a config type. Uses switch so only bundled widget globals
+ * are referenced when their branch runs (partial JS bundles omit unused widget files).
+ */
+function resolveWidgetClass(type) {
+    switch (type) {
+        case 'sankey':
+            return SankeyWidget;
+        case 'evolution':
+            return EvolutionWidget;
+        case 'sunburst':
+            return SunburstWidget;
+        case 'horizon':
+            return HorizonWidget;
+        case 'financial_sankey':
+            return FinancialSankeyWidget;
+        case 'nested_treemap':
+            return NestedTreemapWidget;
+        case 'stacked_area':
+            return StackedAreaWidget;
+        case 'bubble':
+            return BubbleWidget;
+        case 'heatmap':
+            return HeatmapWidget;
+        case 'radial_area':
+            return RadialAreaWidget;
+        default:
+            return undefined;
+    }
+}
 
 function safeParseJSON(text) {
     try {
@@ -57,6 +75,24 @@ function safeParseJSON(text) {
         console.error("Unable to parse dashboard configuration JSON:", e);
         throw e;
     }
+}
+
+const CSV_ENCODING = {
+    GZIP_BASE64: 'gzip-base64',
+};
+
+/**
+ * Decompress gzip+base64 payload to CSV text (async; requires DecompressionStream).
+ */
+async function decodeGzipBase64ToCsvText(b64) {
+    if (typeof DecompressionStream === 'undefined') {
+        throw new Error(
+            'Compressed datasets require DecompressionStream (modern Chromium, Firefox, Safari).'
+        );
+    }
+    const binary = Uint8Array.from(atob(b64.trim()), (c) => c.charCodeAt(0));
+    const stream = new Blob([binary]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Response(stream).text();
 }
 
 function validateWidgetConfig(config) {
@@ -69,7 +105,7 @@ function validateWidgetConfig(config) {
             console.error("Invalid widget configuration (missing type):", wConfig);
             return false;
         }
-        if (WidgetRegistry[wConfig.type] === undefined) {
+        if (resolveWidgetClass(wConfig.type) === undefined) {
             console.error("Widget type unknown:", wConfig.type);
             return false;
         }
@@ -94,8 +130,18 @@ async function init() {
     const datasets = [];
     let i = 0;
     while (document.getElementById(`${APP_CONSTANTS.DATASET_ID_PREFIX}${i}`)) {
-        const rawContent = document.getElementById(`${APP_CONSTANTS.DATASET_ID_PREFIX}${i}`).textContent.trim();
-        datasets.push(d3.csvParse(rawContent));
+        const el = document.getElementById(`${APP_CONSTANTS.DATASET_ID_PREFIX}${i}`);
+        const raw = el.textContent.trim();
+        const enc = el.dataset.csvEncoding;
+        if (!enc) {
+            // Synchronous path when compress_data=False (default); avoids deferring widget init.
+            datasets.push(d3.csvParse(raw));
+        } else if (enc === CSV_ENCODING.GZIP_BASE64) {
+            const text = await decodeGzipBase64ToCsvText(raw);
+            datasets.push(d3.csvParse(text));
+        } else {
+            throw new Error('Unknown data-csv-encoding: ' + enc);
+        }
         i++;
     }
     window.GLOBAL_DATASETS = datasets;
@@ -137,7 +183,7 @@ async function init() {
         box.className = 'chart-box';
         container.appendChild(box);
 
-        const WidgetClass = WidgetRegistry[wConfig.type];
+        const WidgetClass = resolveWidgetClass(wConfig.type);
         const datasetIndex = wConfig.datasetIndex || 0;
         const dataset = window.GLOBAL_DATASETS[datasetIndex] || [];
 
@@ -155,4 +201,6 @@ async function init() {
 
 window.UI_THEME = UI_THEME;
 
-init();
+init().catch((err) => {
+    console.error('Dashboard bootstrap failed:', err);
+});

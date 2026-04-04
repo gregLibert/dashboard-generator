@@ -21,22 +21,45 @@ This project is a lightweight, serverless dashboard engine designed to generate 
 This project is intentionally small and opinionated:
 
 - **Python core (`dashboard_engine.generator.DashboardGenerator`)**
-  - Single entrypoint that takes a JSON-like config and a list of CSV strings.
+  - Single entrypoint: `generate(config, datasets_list, compress_data=False)` (see below).
   - Loads static assets (CSS/JS) from `src/dashboard_engine/assets/`.
   - Renders a Jinja2 `skeleton.html` template into a standalone HTML file.
 
 - **Frontend / D3 widgets (ES Modules)**
-  - Loaded inline as `type="module"` in the generated HTML.
-  - Shared base widget logic in `assets/js/base_widget.js` and helpers in `assets/js/utils.js`.
-  - Concrete widgets:
-    - `sankey_widget.js`, `financial_sankey_widget.js`
-    - `sunburst_widget.js`, `nested_treemap.js`
-    - `evolution_widget.js`, `horizon_widget.js`
-  - `assets/js/main.js` bootstraps the dashboard: parses embedded config & CSV, instantiates widgets.
+  - Inlined as a single `type="module"` script. The generator **does not** embed every widget file by default: it always includes `utils.js`, `base_widget.js`, and `main.js`, then appends only the JS modules required by the widget types declared in `config["widgets"]`. The `d3-sankey` CDN import is prepended only when a Sankey or Financial Sankey widget is present.
+  - Concrete widget modules (see mapping table below): `sankey_widget.js`, `financial_sankey_widget.js`, `sunburst_widget.js`, `treemap_widget.js` (nested treemap), `evolution_widget.js`, `horizon_widget.js`, `stacked_area_widget.js`, `bubble_widget.js`, `heatmap_widget.js`, `radial_area_widget.js`.
+  - `assets/js/main.js` bootstraps the dashboard: async-loads embedded datasets (plain or gzip+base64), parses config, instantiates widgets.
 
 - **Templates**
   - `assets/skeleton.html` is the only Jinja2 template used by the generator.
   - It inlines CSS, JS and CSV data to produce a single, portable HTML file.
+
+### `generate()` parameters
+
+| Argument | Default | Description |
+| --- | --- | --- |
+| `config` | — | Dashboard configuration dict (`title`, `widgets`, …). |
+| `datasets_list` | — | List of CSV strings (UTF-8 text), one per embedded dataset. |
+| `compress_data` | `False` | If `True`, each CSV is gzip-compressed with the standard library, then Base64-encoded. The template sets `data-csv-encoding="gzip-base64"` on the dataset `<script>` tags; the client uses `DecompressionStream('gzip')` before `d3.csvParse`. If `False`, behaviour matches earlier releases (plain CSV text in the page). |
+
+**Widget type → JS module** (unknown `type` in `config["widgets"]` raises `ValueError`):
+
+| `type` | JS file |
+| --- | --- |
+| `sankey` | `js/sankey_widget.js` |
+| `financial_sankey` | `js/financial_sankey_widget.js` |
+| `evolution` | `js/evolution_widget.js` |
+| `sunburst` | `js/sunburst_widget.js` |
+| `horizon` | `js/horizon_widget.js` |
+| `nested_treemap` | `js/treemap_widget.js` |
+| `stacked_area` | `js/stacked_area_widget.js` |
+| `bubble` | `js/bubble_widget.js` |
+| `heatmap` | `js/heatmap_widget.js` |
+| `radial_area` | `js/radial_area_widget.js` |
+
+Authoritative mapping: `WIDGET_TYPE_TO_JS_FILE` in `src/dashboard_engine/generator.py`.
+
+`main.js` resolves widget classes via `resolveWidgetClass()` (a `switch`), so only constructors present in the inlined bundle are ever referenced at runtime—this matches partial JS injection.
 
 - **Tests**
   - **Python / Playwright** integration tests in `tests/` validate:

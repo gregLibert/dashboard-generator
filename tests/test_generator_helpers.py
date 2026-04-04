@@ -24,10 +24,14 @@ def test_build_context_structure_is_stable():
     config = {"title": "My Dashboard", "subtitle": "Sub", "dev_mode": True}
     full_config = {"foo": "bar"}
 
+    datasets_norm = [
+        {"encoding": None, "payload": "csv1"},
+        {"encoding": None, "payload": "csv2"},
+    ]
     context = DashboardGenerator._build_context(
         config=config,
         full_config=full_config,
-        datasets_list=["csv1", "csv2"],
+        datasets_normalized=datasets_norm,
         css_content="/* css */",
         js_content="// js",
     )
@@ -36,7 +40,7 @@ def test_build_context_structure_is_stable():
     assert context["title"] == "My Dashboard"
     assert context["subtitle"] == "Sub"
     assert context["include_dev_markup"] is True
-    assert context["datasets"] == ["csv1", "csv2"]
+    assert context["datasets"] == datasets_norm
     assert context["css_content"] == "/* css */"
     assert context["js_content"] == "// js"
 
