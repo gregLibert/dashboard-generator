@@ -1,8 +1,3 @@
-const HEATMAP_CONSTANTS = {
-    CHART_HEIGHT_PX: 380,
-    DEFAULT_INNER_WIDTH: 800,
-};
-
 /**
  * Pure: build heatmap matrix from flat rows (no instance state).
  */
@@ -81,7 +76,7 @@ class HeatmapWidget extends BaseWidget {
             container.className = 'sub-chart';
             const suffix = Utils.formatYoYChartTitleSuffix(this.state.yoy, year, anchorYear);
             container.innerHTML =
-                `<h4>${year}${suffix}</h4><div class="heatmap-chart" style="height:${HEATMAP_CONSTANTS.CHART_HEIGHT_PX}px;"></div>`;
+                `<h4>${year}${suffix}</h4><div class="heatmap-chart" style="height:${Utils.CHART_LAYOUT.STANDARD_PLOT_HEIGHT}px;"></div>`;
             this.vizWrapper.appendChild(container);
 
             const mount = container.querySelector('.heatmap-chart');
@@ -107,8 +102,9 @@ class HeatmapWidget extends BaseWidget {
             return;
         }
 
-        const width = domNode.clientWidth || HEATMAP_CONSTANTS.DEFAULT_INNER_WIDTH;
-        const height = HEATMAP_CONSTANTS.CHART_HEIGHT_PX;
+        const L = Utils.CHART_LAYOUT;
+        const width = domNode.clientWidth || L.DEFAULT_INNER_WIDTH;
+        const height = L.STANDARD_PLOT_HEIGHT;
         const margin = { top: 30, right: 30, bottom: 40, left: 70 };
 
         const x = d3.scaleBand()

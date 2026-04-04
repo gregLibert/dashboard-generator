@@ -1,7 +1,5 @@
 const SANKEY_CONSTANTS = {
     SUB_CHART_MIN_HEIGHT_PX: 350,
-    VIEW_WIDTH: 800,
-    VIEW_HEIGHT: 400,
     NODE_WIDTH: 15,
     NODE_PADDING: 15,
     LABEL_FONT_PX: 10,
@@ -31,9 +29,10 @@ class SankeyWidget extends BaseWidget {
         }
 
         this.vizWrapper.innerHTML = '';
-        const yearsToShow = this.state.yoy ? [this.state.year - 1, this.state.year] : [this.state.year];
+        const anchorYear = this.state.year;
+        const yearsToShow = Utils.calendarYearsForYoYChart(anchorYear, this.state.yoy);
 
-        yearsToShow.forEach(year => {
+        yearsToShow.forEach((year) => {
             let data = this.getFilteredData(year);
 
             if (this.state.currentFilter) {
@@ -47,7 +46,7 @@ class SankeyWidget extends BaseWidget {
             container.className = 'sub-chart';
 
             const label = Utils.labelForPeriod(this.state.periodType, year, this.state.periodValue);
-            const suffix = (this.state.yoy && year === this.state.year) ? ' (N)' : (this.state.yoy ? ' (N-1)' : '');
+            const suffix = Utils.formatYoYChartTitleSuffix(this.state.yoy, year, anchorYear);
 
             const htmlTitle = renderSankeySubChartTitleHtml(label, suffix, this.state.currentFilter);
 
@@ -119,8 +118,8 @@ class SankeyWidget extends BaseWidget {
     }
 
     drawSankey(domNode, data) {
-        const width = SANKEY_CONSTANTS.VIEW_WIDTH;
-        const height = SANKEY_CONSTANTS.VIEW_HEIGHT;
+        const width = Utils.CHART_LAYOUT.DEFAULT_INNER_WIDTH;
+        const height = Utils.CHART_LAYOUT.SANKEY_VIEW_HEIGHT;
 
         const { nodes, links } = this.buildGraphFromData(data);
 

@@ -11,17 +11,12 @@ if PROJECT_ROOT not in sys.path:
 
 from dashboard_engine.generator import DashboardGenerator
 
-# --- 2. Data Setup ---
+# --- 2. Test data ---
 
 @pytest.fixture(scope="module")
 def csv_data_file(tmp_path_factory):
     """
-    Jeu de données financier.
-    Structure : Source -> Target (Type)
-    Exemple: 
-    - Sales -> Revenue (Input)
-    - Revenue -> Profit (Profit - Vert)
-    - Revenue -> Tax (Cost - Rouge)
+    Financial flows: source -> target with semantic type (input / profit / cost).
     """
     csv_content = """mois_annee,source,target,amount,type
 2025-01,Sales,Revenue,5000,input
@@ -87,11 +82,11 @@ def test_financial_structure_and_hidden_controls(page: Page, generated_report):
     expect(page.locator(".ctrl-period-type")).to_be_hidden()
     expect(page.locator(".ctrl-period-value")).to_be_hidden()
     
-    # 3. Check Chart Headers
-    # Should display "Année 2025" and "Année 2024" (YoY is default)
+    # 3. Check chart headers (YoY on by default: N-1 then N with standardized suffixes)
     charts = page.locator(".sub-chart")
     expect(charts).to_have_count(2)
-    expect(charts.last.locator("h4")).to_have_text("Année 2025")
+    expect(charts.first.locator("h4")).to_have_text("Année 2024 (N-1)")
+    expect(charts.last.locator("h4")).to_have_text("Année 2025 (N)")
 
 
 def test_financial_semantic_coloring(page: Page, generated_report):

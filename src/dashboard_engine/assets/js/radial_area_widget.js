@@ -1,6 +1,4 @@
 const RADIAL_CONSTANTS = {
-    CHART_MIN_HEIGHT_PX: 400,
-    DEFAULT_SQUARE_WIDTH: 400,
     MARGIN: 10,
 };
 
@@ -17,7 +15,8 @@ class RadialAreaWidget extends BaseWidget {
 
         const container = document.createElement('div');
         container.className = 'sub-chart';
-        container.innerHTML = `<div style="height:${RADIAL_CONSTANTS.CHART_MIN_HEIGHT_PX}px"></div>`;
+        const L = Utils.CHART_LAYOUT;
+        container.innerHTML = `<div style="height:${L.SQUARE_VIEW_SIZE}px"></div>`;
         this.vizWrapper.appendChild(container);
 
         const year = this.state.year;
@@ -122,7 +121,7 @@ class RadialAreaWidget extends BaseWidget {
             return;
         }
 
-        const width = domNode.clientWidth || RADIAL_CONSTANTS.DEFAULT_SQUARE_WIDTH;
+        const width = domNode.clientWidth || Utils.CHART_LAYOUT.SQUARE_VIEW_SIZE;
         const height = width;
         const margin = RADIAL_CONSTANTS.MARGIN;
         const innerRadius = width / 5;

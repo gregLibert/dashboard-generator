@@ -18,6 +18,20 @@ const Utils = {
     moisFR: MONTH_LABELS_FR,
     fmtNumber: NUMBER_FORMAT_FR,
 
+    /**
+     * Default pixel sizes for D3 viewBoxes and fallbacks (single source of truth).
+     */
+    CHART_LAYOUT: {
+        DEFAULT_INNER_WIDTH: 800,
+        STANDARD_PLOT_HEIGHT: 380,
+        SQUARE_VIEW_SIZE: 400,
+        SANKEY_VIEW_HEIGHT: 400,
+        TREEMAP_WIDTH: 600,
+        TREEMAP_HEIGHT: 500,
+        TREEMAP_HEADER_PADDING: 18,
+        TREEMAP_COMPACT_ROW_THRESHOLD: 35,
+    },
+
     getQuarter(m) {
         return Math.ceil(m / 3);
     },

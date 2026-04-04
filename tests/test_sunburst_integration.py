@@ -12,24 +12,24 @@ if PROJECT_ROOT not in sys.path:
 
 from dashboard_engine.generator import DashboardGenerator
 
-# --- 2. Data Setup ---
+# --- 2. Test data ---
 
 @pytest.fixture(scope="module")
 def csv_data_file(tmp_path_factory):
     """
-    Jeu de données hiérarchique complet sur 5 niveaux.
+    Five-level hierarchy; 2024 for color stability, 2025 for depth and size cases.
     """
     csv_content = """mois_annee,l1,l2,l3,l4,l5,amount
-# --- 2024 (N-1) : Pour vérifier la stabilité des couleurs ---
+# --- 2024 (N-1): color stability ---
 2024-01,DeepGroup,Lvl2,Lvl3,Lvl4,Lvl5_Old,100
 
-# --- 2025 (N) : Branche Profonde Multipliée ---
+# --- 2025 (N): deep branch split ---
 2025-01,DeepGroup,Lvl2,Lvl3,Lvl4,Lvl5_A,25
 2025-01,DeepGroup,Lvl2,Lvl3,Lvl4,Lvl5_B,25
 2025-01,DeepGroup,Lvl2,Lvl3,Lvl4,Lvl5_C,25
 2025-01,DeepGroup,Lvl2,Lvl3,Lvl4,Lvl5_D,25
 
-# --- 2025 (N) : Branche Taille (Big vs Small) ---
+# --- 2025 (N): size contrast (big vs small) ---
 2025-01,SizeGroup,BigItem,Big_L3,Big_L4,Big_L5,995
 2025-01,SizeGroup,SmallItem,Small_L3,Small_L4,Small_L5,5
 """
@@ -75,15 +75,14 @@ def generated_report(csv_data_file):
 # --- 3. HELPER FUNCTIONS ---
 
 def get_sub_chart(page, widget_title, year):
-    """Récupère le graphique spécifique (2024 ou 2025) d'un widget"""
+    """Return the sub-chart locator for a given widget title and year."""
     chart_box = page.locator(".chart-box", has=page.locator("h2", has_text=widget_title))
     return chart_box.locator(".sub-chart", has=page.locator("h4", has_text=str(year)))
 
 def get_l1_slice(chart, group_name):
-    """ 
-    Récupère un Path (arc) par son nom de groupe (Tooltip).
-    Utilise XPath 'local-name()' pour traverser le namespace SVG.
-    Exclut les enfants (qui contiennent ' > ').
+    """
+    First path whose title tooltip matches group_name at L1 (excludes ' > ' child titles).
+    Uses XPath local-name() for SVG namespaces.
     """
     xpath_selector = (
         f"xpath=.//*[local-name()='path']"
@@ -101,7 +100,7 @@ def get_arc_area(locator):
 
 def test_TC01_sunburst_depth_visibility(page: Page, generated_report):
     """
-    TC01: Vérifie la visibilité progressive (Drill-down).
+    TC01: Progressive visibility on drill-down.
     """
     page.goto(generated_report)
     chart = get_sub_chart(page, "Sunburst LINEAR", 2025)
@@ -110,46 +109,46 @@ def test_TC01_sunburst_depth_visibility(page: Page, generated_report):
     l1 = get_l1_slice(chart, "DeepGroup")
     expect(l1).to_be_visible()
     
-    # 2. Lvl2 (L2) visible (On utilise le locator simple pour l'enfant)
+    # 2. L2 child visible
     l2 = chart.locator("path").filter(has=page.locator("title", has_text="DeepGroup > Lvl2")).first
     expect(l2).to_be_visible()
     
-    # 3. Lvl3 (L3) invisible au départ
+    # 3. L3 hidden before zoom
     l3 = chart.locator("path").filter(has=page.locator("title", has_text="Lvl2 > Lvl3")).first
     if l3.count() > 0:
         opacity = l3.evaluate("el => getComputedStyle(el).fillOpacity")
-        assert float(opacity) < 0.1, "L3 devrait être invisible avant zoom"
+        assert float(opacity) < 0.1, "L3 should be hidden before zoom"
 
-    # 4. Zoom sur Lvl2
+    # 4. Zoom into L2
     l2.click(force=True)
-    page.wait_for_timeout(1000) # Attente animation
-    
-    # 5. Lvl3 devient visible
+    page.wait_for_timeout(1000)
+
+    # 5. L3 becomes visible
     expect(l3).to_have_css("fill-opacity", re.compile(r"0\.[6-9]|1"))
 
 
 def test_TC02_sunburst_breadcrumbs_5_levels(page: Page, generated_report):
     """
-    TC02: Vérifie que le fil d'ariane gère bien la navigation.
+    TC02: Breadcrumb navigation across levels.
     """
     page.goto(generated_report)
     
     linear_box = page.locator(".chart-box", has=page.locator("h2", has_text="Sunburst LINEAR"))
     crumbs = linear_box.locator(".breadcrumbs")
     
-    # 1. Clic sur "DeepGroup" (via texte pour éviter problème géométrique)
+    # 1. Click DeepGroup (text to avoid geometry issues)
     linear_box.locator("text", has_text="DeepGroup").first.click(force=True)
     page.wait_for_timeout(800)
     
-    # 2. Clic sur "Lvl2"
+    # 2. Click Lvl2
     linear_box.locator("text", has_text="Lvl2").first.click(force=True)
     page.wait_for_timeout(800)
 
-    # --- VÉRIFICATIONS ---
+    # --- Assertions ---
     expect(crumbs).to_contain_text("DeepGroup")
     expect(crumbs).to_contain_text("Lvl2")
     
-    # --- RETOUR ARRIÈRE ---
+    # --- Back to root ---
     crumbs.locator(".crumb", has_text="Total").click()
     page.wait_for_timeout(800)
     
@@ -158,13 +157,12 @@ def test_TC02_sunburst_breadcrumbs_5_levels(page: Page, generated_report):
 
 def test_TC03_sunburst_arc_sizes_linear_consistency(page: Page, generated_report):
     """
-    TC03: Vérifie que la taille graphique correspond aux données (Linéaire).
-    SizeGroup (995) doit être beaucoup plus grand que SmallItem (5).
+    TC03: Linear scale — BigItem area >> SmallItem area for SizeGroup branch.
     """
     page.goto(generated_report)
     chart = get_sub_chart(page, "Sunburst LINEAR", 2025)
     
-    # Récupération des arcs enfants de SizeGroup
+    # Child arcs under SizeGroup
     big_slice = chart.locator("path").filter(has=page.locator("title", has_text="BigItem")).first
     small_slice = chart.locator("path").filter(has=page.locator("title", has_text="SmallItem")).first
     
@@ -176,13 +174,12 @@ def test_TC03_sunburst_arc_sizes_linear_consistency(page: Page, generated_report
     
     print(f"\n[LINEAR] Big: {area_big:.2f}, Small: {area_small:.2f}")
 
-    assert area_big > (area_small * 50), "Mode Linéaire incorrect: ratio de taille insuffisant."
+    assert area_big > (area_small * 50), "Linear mode: size ratio too small."
 
 
 def test_TC06_sunburst_color_consistency(page: Page, generated_report):
     """
-    TC06: Vérifie la stabilité des couleurs entre 2024 et 2025 (YoY).
-    'DeepGroup' doit avoir la même couleur, peu importe l'ordre ou les nouvelles données.
+    TC06: YoY color stability — DeepGroup fill matches across 2024 and 2025.
     """
     page.goto(generated_report)
     
@@ -203,4 +200,4 @@ def test_TC06_sunburst_color_consistency(page: Page, generated_report):
     print(f"\n[Checking {item_name}]: 2024={col_24} vs 2025={col_25}")
     
     assert col_24 == col_25, \
-        f"[BUG COULEUR] '{item_name}' a changé de couleur ! {col_24} != {col_25}"
+        f"Color drift for '{item_name}': {col_24} != {col_25}"

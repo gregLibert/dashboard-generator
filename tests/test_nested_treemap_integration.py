@@ -3,7 +3,7 @@ import sys
 import pytest
 from playwright.sync_api import Page, expect
 
-# --- Setup ---
+# --- Test module setup ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
@@ -22,11 +22,11 @@ def csv_treemap_data(tmp_path_factory):
 # 1. Standard Path
 2025-01,BranchA,SubA,DeepA,LeafA,100
 
-# 2. Test Couleur
+# 2. Color consistency case
 2025-01,BranchA,SharedItem,DeepX,LeafX,100
 2025-01,BranchB,SharedItem,DeepY,LeafY,100
 
-# 3. Test Échelle (100 vs 1000)
+# 3. Scale case (100 vs 1000)
 2025-01,ScaleTest,GiantGroup,GiantSub,GiantLeaf,1000
 2025-01,ScaleTest,SmallGroup,SmallSub,SmallLeaf,100
 
@@ -138,28 +138,26 @@ def test_TC02_nested_treemap_labels_and_overlay(page: Page, treemap_report):
     small_leaf_text = get_text_group_by_name(page, "SmallLeaf", year=2025)
     small_leaf_text.wait_for(state="attached")
     
-    # Au départ: SmallLeaf visible car SmallSub sacrifié
+    # Initially SmallLeaf visible; SmallSub label sacrificed for space
     op = small_leaf_text.evaluate("el => window.getComputedStyle(el).opacity")
-    assert float(op) == 1, "SmallLeaf devrait être visible (SmallSub sacrifié)"
+    assert float(op) == 1, "SmallLeaf should be visible while SmallSub label is dropped"
     
-    # Vérif sacrifice: SmallSub n'a pas de texte
+    # Sacrifice: no SmallSub tspan
     small_sub_tspan = get_chart_container(page, 2025).locator("xpath=.//*[local-name()='tspan' and text()='SmallSub']")
-    assert small_sub_tspan.count() == 0, "Titre SmallSub devrait être masqué"
+    assert small_sub_tspan.count() == 0, "SmallSub title should be hidden when compact"
     
-    # 3. Zoom pour donner de la place
+    # 3. Zoom in to free space
     get_rect_by_name(page, "ScaleTest", year=2025).dispatch_event("click")
     page.wait_for_timeout(500)
     get_rect_by_name(page, "SmallGroup", year=2025).dispatch_event("click")
     page.wait_for_timeout(800)
     
-    # VERIF FINALE : SmallSub réapparaît
-    # On est zoomé sur SmallGroup. SmallSub prend tout l'écran.
-    # Il n'est plus compact. Son titre doit être généré.
-    
-    # Note: On doit re-chercher l'élément car le DOM a été redessiné (Re-Layout)
+    # After zoom: SmallSub is no longer compact — label should reappear
+
+    # Re-query after relayout
     small_sub_tspan_after = get_chart_container(page, 2025).locator("xpath=.//*[local-name()='tspan' and text()='SmallSub']")
     
-    # On attend qu'il apparaisse
+    # Wait for label
     expect(small_sub_tspan_after).to_be_visible()
     assert small_sub_tspan_after.count() > 0, "Le titre SmallSub devrait réapparaître après zoom"
 
@@ -242,13 +240,13 @@ def test_TC04_nested_treemap_synchronization(page: Page, treemap_report):
     
     # On compare la surface ou la largeur. Ici largeur avec ratio prudent.
     ratio_25 = giant_leaf.bounding_box()['width'] / get_chart_container(page, 2025).bounding_box()['width']
-    assert ratio_25 > 0.87, f"2025 aurait dû zoomer sur ScaleTest (Ratio: {ratio_25})"
+    assert ratio_25 > 0.87, f"2025 should zoom ScaleTest (ratio: {ratio_25})"
     
-    # 2024 : Ne contient pas ScaleTest -> Doit afficher 'No data'
+    # 2024 has no ScaleTest row -> empty state
     container_24 = get_chart_container(page, 2024)
     expect(container_24).to_contain_text("No data available")
     
-    # On vérifie que le SVG précédent a disparu
+    # No treemap rects for empty year
     expect(container_24.locator("rect")).to_have_count(0)
     
     # Breadcrumb OK

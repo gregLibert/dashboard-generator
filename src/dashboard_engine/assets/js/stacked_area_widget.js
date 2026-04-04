@@ -79,20 +79,21 @@ class StackedAreaWidget extends BaseWidget {
         // When YoY is enabled, use a single width reference for all sub-charts (N and N-1)
         // so that their diagrams share the exact same dimensions. For a single year view,
         // we let each chart compute its own width from its container to avoid overflow.
+        const L = Utils.CHART_LAYOUT;
         if (this.state.yoy) {
-            this.chartWidth = this.vizWrapper.clientWidth || 800;
+            this.chartWidth = this.vizWrapper.clientWidth || L.DEFAULT_INNER_WIDTH;
         } else {
             this.chartWidth = null;
         }
 
-        const yearsToShow = this.state.yoy
-            ? [this.state.year - 1, this.state.year]
-            : [this.state.year];
+        const anchorYear = this.state.year;
+        const yearsToShow = Utils.calendarYearsForYoYChart(anchorYear, this.state.yoy);
 
-        yearsToShow.forEach(year => {
+        yearsToShow.forEach((year) => {
             const container = document.createElement('div');
             container.className = 'sub-chart';
-            container.innerHTML = `<h4>Année ${year}</h4><div style="height:380px"></div>`;
+            const ySuffix = Utils.formatYoYChartTitleSuffix(this.state.yoy, year, anchorYear);
+            container.innerHTML = `<h4>Année ${year}${ySuffix}</h4><div style="height:${L.STANDARD_PLOT_HEIGHT}px"></div>`;
             this.vizWrapper.appendChild(container);
 
             const data = this.rawData.filter(d => d.year === year);
@@ -109,8 +110,9 @@ class StackedAreaWidget extends BaseWidget {
     drawStackedArea(domNode, data) {
         const { value } = this.config.mapping;
 
-        const width = this.chartWidth || domNode.clientWidth || 800;
-        const height = 380;
+        const L = Utils.CHART_LAYOUT;
+        const width = this.chartWidth || domNode.clientWidth || L.DEFAULT_INNER_WIDTH;
+        const height = L.STANDARD_PLOT_HEIGHT;
         const margin = { top: 30, right: 30, bottom: 30, left: 50 };
 
         const { xValues, categories, seriesByCategory } = this.buildStackedSeries(data);

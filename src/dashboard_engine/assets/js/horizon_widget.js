@@ -1,7 +1,3 @@
-const HORIZON_CONSTANTS = {
-    DEFAULT_INNER_WIDTH: 800,
-};
-
 class HorizonWidget extends BaseWidget {
 
     initLayout() {
@@ -71,7 +67,7 @@ class HorizonWidget extends BaseWidget {
         const { x: xCol, y: yCol, value: valCol } = this.config.mapping;
         const model = this.buildRidgelineModel(data);
 
-        const width = domNode.clientWidth || HORIZON_CONSTANTS.DEFAULT_INNER_WIDTH;
+        const width = domNode.clientWidth || Utils.CHART_LAYOUT.DEFAULT_INNER_WIDTH;
         const totalHeight = model.groupKeys.length * model.rowHeight;
 
         const x = d3.scaleLinear()

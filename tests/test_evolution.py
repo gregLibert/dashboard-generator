@@ -4,20 +4,20 @@ import sys
 import pytest
 from playwright.sync_api import Page, expect
 
-# --- 1. Gestion des imports du projet ---
+# --- 1. Project imports ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from dashboard_engine.generator import DashboardGenerator
 
-# --- 2. Configuration des données ---
+# --- 2. Test data ---
 
 @pytest.fixture(scope="module")
 def csv_data_file(tmp_path_factory):
     """
-    Données conçues pour tester l'aggrégation (Somme).
-    Janvier 2025 a 3 entrées pour vérifier que le graph affiche bien le TOTAL.
+    Dataset for aggregation (sum) checks.
+    January 2025 has three rows so the chart must show the correct total.
     """
     csv_content = """mois_annee,scheme,tsp,amount,option,tech
 2024-01,Visa,Worldline,1000,Token,Credit
@@ -85,221 +85,187 @@ def generated_report(csv_data_file):
     return f"file:///{output_report.replace(os.sep, '/')}"
 
 
-# --- 3. Tests Fonctionnels et Métier ---
+# --- 3. Functional tests ---
 
 def test_evolution_structure_and_hidden_controls(page: Page, generated_report):
     """
-    Vérifie la structure et surtout que les contrôles inutiles pour ce widget
-    (Type de période, Valeur de période) sont bien masqués par le CSS.
+    Checks layout and that period controls unused by this widget are hidden via CSS.
     """
     page.goto(generated_report)
     
-    # 1. Titre et Description
+    # 1. Title and description
     expect(page.locator(".chart-title")).to_have_text("Évolution Mensuelle (N vs N-1)")
     page.click(".info-icon")
     expect(page.locator(".widget-description")).to_contain_text("Validation de l'aggrégation")
 
-    # 2. Vérification des contrôles masqués (Spécificité EvolutionWidget)
-    # Les classes .ctrl-period-type et .ctrl-period-value doivent être cachées
+    # 2. Hidden controls (EvolutionWidget-specific)
+    # .ctrl-period-type and .ctrl-period-value must be hidden
     ctrl_type = page.locator(".ctrl-period-type")
     ctrl_value = page.locator(".ctrl-period-value")
     
-    # expect(locator).to_be_hidden() vérifie display:none, visibility:hidden, etc.
+    # to_be_hidden() covers display:none, visibility:hidden, etc.
     expect(ctrl_type).to_be_hidden()
     expect(ctrl_value).to_be_hidden()
     
-    # 3. Vérification que le sélecteur d'année, lui, est visible
+    # 3. Year selector remains visible
     expect(page.locator("text=Année:")).to_be_visible()
 
 
 def test_evolution_graph_yoy_toggling(page: Page, generated_report):
     """
-    Vérifie le rendu des lignes (Courbe N et Courbe N-1) et le toggle YoY.
+    Checks N vs N-1 lines and the YoY toggle.
     """
     page.goto(generated_report)
     
-    # Sélectionner 2025 pour être sûr d'avoir N (2025) et N-1 (2024)
+    # Select 2025 so N=2025 and N-1=2024
     page.locator('select[data-testid="widget-year-select"]').first.select_option("2025")
     
     container = page.locator(".sub-chart svg")
     
-    # 1. Vérifier la présence de la courbe N (Ligne continue)
-    # Dans le code JS: stroke-width=3, pas de dasharray
+    # 1. N series: solid line (JS stroke-width=3, no dasharray)
     line_n = container.locator("path[stroke-width='3']")
     expect(line_n).to_be_visible()
     
-    # 2. Vérifier la présence de la courbe N-1 (Ligne pointillée)
-    # Dans le code JS: stroke-dasharray='5,5'
+    # 2. N-1 series: dashed (JS stroke-dasharray='5,5')
     line_n1 = container.locator("path[stroke-dasharray='5,5']")
     expect(line_n1).to_be_visible()
     
-    # 3. Désactiver le YoY
+    # 3. Disable YoY
     page.locator(".ctrl-yoy input").uncheck()
     
-    # 4. Vérifier que la courbe N-1 a disparu
+    # 4. N-1 line should disappear
     expect(line_n1).not_to_be_visible()
-    # La courbe N doit rester
+    # N line must remain
     expect(line_n).to_be_visible()
 
 
 def test_data_aggregation_accuracy(page: Page, generated_report):
     """
-    CRITIQUE : Vérifie que le code JS somme correctement les valeurs mensuelles.
-    Données pour Janvier 2025 (N) :
-    - Visa: 1500
-    - CB: 2300
-    - Mastercard: 800
-    ----------------
-    TOTAL ATTENDU : 4600
+    Ensures JS sums monthly rows correctly.
+    January 2025 (N): Visa 1500 + CB 2300 + Mastercard 800 => 4600.
     """
     page.goto(generated_report)
     
-    # Setup : Année 2025
+    # Setup: year 2025
     page.locator('select[data-testid="widget-year-select"]').first.select_option("2025")
     
-    # On cible les points (cercles) de la courbe N
-    # Le JS dessine des cercles avec la classe 'dotN' (ou implicitement via selectAll)
-    # Dans le code fourni: svg.selectAll(".dotN").data(dataLineN).join("circle")
-    # Donc on peut cibler les <circle>
+    # Target N-series dots (JS: .dot-N circles)
     
     dots = page.locator(".sub-chart svg .dot-N")
     
-    # Janvier est le premier point (index 0) car les données sont triées
+    # January is index 0 (data sorted by month)
     january_dot = dots.nth(0)
     
-    # Récupération du Tooltip (balise title interne)
-    # .text_content() lit le contenu invisible du <title> SVG
+    # Tooltip from internal SVG <title>; text_content() reads it
     tooltip_text = january_dot.text_content()
     
-    print(f"Tooltip trouvé pour Janvier : '{tooltip_text}'")
+    print(f"January tooltip: '{tooltip_text}'")
     
-    # Assertion 1 : Le mois est correct
+    # Month label present
     assert "Janvier" in tooltip_text
     
-    # Assertion 2 : La somme est correcte (4 600)
-    # Regex pour gérer les espaces (4600, 4 600, 4<nbsp>600)
-    # On cherche "4" suivi d'espace optionnel et "600"
+    # Sum 4600 with optional spacing / nbsp
     match_sum = re.search(r"4[\s\u202f\u00a0]*600", tooltip_text)
     
-    assert match_sum, f"Erreur de somme ! Attendu '4 600', trouvé : {tooltip_text}"
+    assert match_sum, f"Expected total ~4600 in tooltip, got: {tooltip_text}"
 
 def test_evolution_legend_labels(page: Page, generated_report):
     """
-    Vérifie la présence des légendes internes au graphique (Titres des séries).
-    Le code JS dessine : "Année 2025" (Bleu) et "Année 2024" (Gris/Pointillé).
+    Checks in-chart legend text for N and N-1 series.
     """
     page.goto(generated_report)
     
-    # On se met en 2025 avec YoY activé
+    # Year 2025 with YoY on
     page.locator('select[data-testid="widget-year-select"]').first.select_option("2025")
     page.locator(".ctrl-yoy input").check()
     
-    # On cible le SVG
+    # SVG root
     svg = page.locator(".sub-chart svg")
     
-    # Vérification de la légende Année N
-    # Note : Le texte est dessiné via SVG <text>, on peut le chercher par contenu
+    # Legend N (SVG <text>)
     legend_n = svg.locator("text", has_text="Année 2025")
     expect(legend_n).to_be_visible()
     
-    # Vérification de la légende Année N-1
+    # Legend N-1
     legend_n1 = svg.locator("text", has_text="Année 2024")
     expect(legend_n1).to_be_visible()
 
 
 def test_export_csv_functionality(page: Page, generated_report):
     """
-    Vérifie que le bouton d'export fonctionne aussi sur cette page.
-    Critique : S'assurer que le téléchargement se déclenche et a un nom cohérent.
+    Export button triggers download with a sensible filename.
     """
     page.goto(generated_report)
 
-    # Le bouton est global dans le header
+    # Global header button
     export_btn = page.locator("#btn-export")
     expect(export_btn).to_be_visible()
 
-    # Interception du téléchargement
+    # Capture download
     with page.expect_download() as download_info:
         export_btn.click()
 
     download = download_info.value
     
-    # Vérifications de base sur le fichier
+    # Filename checks
     fname = download.suggested_filename
     assert fname.endswith(".csv")
     assert "qa_evolution_integration" in fname.lower() or "dataset" in fname.lower()
     
-    # Vérification rapide du contenu (optionnel mais recommandé)
+    # Quick content smoke check
     file_path = download.path()
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
-        # On vérifie qu'on retrouve nos headers
+        # Expected CSV headers
         assert "mois_annee" in content
         assert "amount" in content
 
 
 def test_evolution_n_minus_1_interactivity(page: Page, generated_report):
     """
-    Vérifie que l'année N-1 possède désormais des 'boutons' (points) interactifs.
+    N-1 series exposes interactive hit targets (dots).
     """
     page.goto(generated_report)
     
-    # Setup 2025 + YoY
+    # Setup: 2025 + YoY
     page.locator('select[data-testid="widget-year-select"]').first.select_option("2025")
     page.locator(".ctrl-yoy input").check()
 
     container = page.locator(".sub-chart svg")
     
-    # On cherche les cercles qui correspondent à N-1.
-    # Dans le code JS mis à jour : stroke-dasharray (pour la ligne) mais les cercles 
-    # héritent de propriétés ou sont dessinés dans une boucle. 
-    # Mon code JS utilise title contenant "Année 2024" pour N-1.
-    
-    # On cherche un cercle dont le titre contient "Année 2024" (ou l'année précédente selon le dataset)
+    # N-1 dots: title text includes prior year (2024 for anchor 2025)
     dot_n1 = container.locator("circle").filter(has_text="Année 2024").first
     
     expect(dot_n1).to_be_visible()
     
-    # Vérification Tooltip N-1
-    expect(dot_n1).to_contain_text("Année 2024") # Le <title> est interne
+    # Tooltip N-1
+    expect(dot_n1).to_contain_text("Année 2024")  # internal <title>
     expect(dot_n1).to_contain_text("Val:")
 
 
 def test_evolution_percentage_labels(page: Page, generated_report, csv_data_file):
     """
-    Vérifie l'affichage des pourcentages d'évolution (+X% / -Y%).
-    Utilise les données connues du CSV temporaire :
-    Jan 2024 = 1000 (Visa) + 2000 (CB) + 500 (Master) = 3500
-    Jan 2025 = 1500 (Visa) + 2300 (CB) + 800 (Master) = 4600
-    
-    Evolution = (4600 - 3500) / 3500 * 100 = +31.42% -> Arrondi +31%
+    YoY percentage labels: Jan 2024 total 3500 vs Jan 2025 4600 => ~+31%.
     """
     page.goto(generated_report)
     page.locator('select[data-testid="widget-year-select"]').first.select_option("2025")
     
-    # On cherche le text label au dessus du point de Janvier
-    # Le label est un <text> avec ancre "middle" et une couleur (vert/rouge)
-    
-    # On va chercher le texte "+31%" spécifiquement
+    # Label above January point (+31%)
     label_pct = page.locator(".sub-chart svg text", has_text="+31%")
     
     expect(label_pct).to_be_visible()
     
-    # Vérification de la couleur (Vert pour positif)
-    # #2e7d32 est le vert défini dans le JS
+    # Positive delta: green (#2e7d32 in JS)
     expect(label_pct).to_have_attribute("fill", "#2e7d32")
 
 
 def test_legend_background_fix(page: Page, generated_report):
     """
-    Vérifie que la légende possède un fond opaque pour éviter le chevauchement avec la courbe.
+    Legend group uses an opaque background so text does not clash with the line.
     """
     page.goto(generated_report)
-    
-    # Le JS ajoute un <rect> dans le groupe de légende
-    # On cible le dernier <g> (généralement la légende est dessinée en dernier) ou par structure
-    
-    # On cherche un rect avec fill blanc quasi opaque
+
+    # JS adds a near-opaque white rect behind legend text
     legend_bg = page.locator(".sub-chart svg rect[fill='rgba(255, 255, 255, 0.9)']")
     
     expect(legend_bg).to_be_visible()

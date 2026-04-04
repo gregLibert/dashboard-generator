@@ -1,6 +1,4 @@
 const FIN_SANKEY_CONSTANTS = {
-    VIEW_WIDTH: 800,
-    VIEW_HEIGHT: 400,
     NODE_WIDTH: 20,
     NODE_PADDING: 20,
 };
@@ -60,8 +58,8 @@ class FinancialSankeyWidget extends BaseWidget {
     }
 
     drawSankey(domNode, data) {
-        const width = FIN_SANKEY_CONSTANTS.VIEW_WIDTH;
-        const height = FIN_SANKEY_CONSTANTS.VIEW_HEIGHT;
+        const width = Utils.CHART_LAYOUT.DEFAULT_INNER_WIDTH;
+        const height = Utils.CHART_LAYOUT.SANKEY_VIEW_HEIGHT;
 
         const { nodes, links } = this.buildGraphFromData(data);
         const palette = UI_THEME.financialSankey;
@@ -134,14 +132,16 @@ class FinancialSankeyWidget extends BaseWidget {
 
     update() {
         this.vizWrapper.innerHTML = '';
-        const yearsToShow = this.state.yoy ? [this.state.year - 1, this.state.year] : [this.state.year];
+        const anchorYear = this.state.year;
+        const yearsToShow = Utils.calendarYearsForYoYChart(anchorYear, this.state.yoy);
 
-        yearsToShow.forEach(year => {
+        yearsToShow.forEach((year) => {
             const data = this.getFilteredData(year);
             const container = document.createElement('div');
             container.className = 'sub-chart';
 
-            container.innerHTML = `<h4>Année ${year}</h4><div class="sankey-container" style="width:100%;"></div>`;
+            const ySuffix = Utils.formatYoYChartTitleSuffix(this.state.yoy, year, anchorYear);
+            container.innerHTML = `<h4>Année ${year}${ySuffix}</h4><div class="sankey-container" style="width:100%;"></div>`;
             this.vizWrapper.appendChild(container);
 
             if (data.length === 0) {

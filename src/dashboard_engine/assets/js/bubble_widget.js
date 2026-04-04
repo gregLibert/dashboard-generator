@@ -1,6 +1,4 @@
 const BUBBLE_CONSTANTS = {
-    CHART_HEIGHT_PX: 380,
-    DEFAULT_INNER_WIDTH: 800,
     MAX_RADIUS_PX: 30,
 };
 
@@ -97,7 +95,7 @@ class BubbleWidget extends BaseWidget {
             container.className = 'sub-chart';
             const suffix = Utils.formatYoYChartTitleSuffix(this.state.yoy, year, anchorYear);
             container.innerHTML =
-                `<h4>${year}${suffix}</h4><div class="bubble-chart" style="height:${BUBBLE_CONSTANTS.CHART_HEIGHT_PX}px;"></div>`;
+                `<h4>${year}${suffix}</h4><div class="bubble-chart" style="height:${Utils.CHART_LAYOUT.STANDARD_PLOT_HEIGHT}px;"></div>`;
             this.vizWrapper.appendChild(container);
 
             const mount = container.querySelector('.bubble-chart');
@@ -124,8 +122,9 @@ class BubbleWidget extends BaseWidget {
         }
 
         const margin = { top: 30, right: 30, bottom: 40, left: 50 };
-        const chartHeight = BUBBLE_CONSTANTS.CHART_HEIGHT_PX;
-        const innerWidth = domNode.clientWidth || BUBBLE_CONSTANTS.DEFAULT_INNER_WIDTH;
+        const L = Utils.CHART_LAYOUT;
+        const chartHeight = L.STANDARD_PLOT_HEIGHT;
+        const innerWidth = domNode.clientWidth || L.DEFAULT_INNER_WIDTH;
 
         const domains = sharedDomains || bubbleDomainsFromPoints(bubbles);
         if (!domains) {

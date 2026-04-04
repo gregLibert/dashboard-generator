@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from dashboard_engine.generator import DashboardGenerator
 
 
@@ -8,7 +10,7 @@ def test_build_full_config_adds_generation_date():
 
     full = DashboardGenerator._build_full_config(config)
 
-    # Keep original keys intact
+    # Original keys stay intact
     assert full["title"] == "Test"
     assert full["widgets"] == []
 
@@ -43,30 +45,31 @@ def test_build_context_structure_is_stable():
     assert decoded == full_config
 
 
-def test_validate_inputs_rejects_invalid_types():
+_VALIDATE_INPUTS_CASES = [
+    pytest.param(
+        {"config": "not-a-dict", "datasets_list": []},
+        TypeError,
+        "config must be a dict",
+        id="invalid_config_type",
+    ),
+    pytest.param(
+        {"config": {}, "datasets_list": "not-a-list"},
+        TypeError,
+        "datasets_list must be a list or tuple",
+        id="invalid_datasets_list_type",
+    ),
+    pytest.param(
+        {"config": {}, "datasets_list": [b"bytes-are-not-allowed"]},
+        TypeError,
+        "must be a string containing CSV data",
+        id="invalid_dataset_element_type",
+    ),
+]
+
+
+@pytest.mark.parametrize("kwargs,exc_type,msg_substr", _VALIDATE_INPUTS_CASES)
+def test_validate_inputs_rejects_invalid_types(kwargs, exc_type, msg_substr):
     gen = DashboardGenerator()
-
-    # Invalid config type
-    try:
-        gen._validate_inputs(config="not-a-dict", datasets_list=[])
-    except TypeError as exc:
-        assert "config must be a dict" in str(exc)
-    else:
-        raise AssertionError("Expected TypeError for invalid config type")
-
-    # Invalid datasets_list type
-    try:
-        gen._validate_inputs(config={}, datasets_list="not-a-list")
-    except TypeError as exc:
-        assert "datasets_list must be a list or tuple" in str(exc)
-    else:
-        raise AssertionError("Expected TypeError for invalid datasets_list type")
-
-    # Invalid dataset element type
-    try:
-        gen._validate_inputs(config={}, datasets_list=[b"bytes-are-not-allowed"])
-    except TypeError as exc:
-        assert "must be a string containing CSV data" in str(exc)
-    else:
-        raise AssertionError("Expected TypeError for invalid dataset element type")
-
+    with pytest.raises(exc_type) as exc_info:
+        gen._validate_inputs(**kwargs)
+    assert msg_substr in str(exc_info.value)

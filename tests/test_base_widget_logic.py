@@ -14,7 +14,7 @@ from dashboard_engine.generator import DashboardGenerator
 
 @pytest.fixture(scope="module")
 def csv_data_file(tmp_path_factory):
-    # Données couvrant 2 années (2024, 2025) et tous les trimestres
+    # Two years (2024, 2025) and multiple quarters
     csv_content = """mois_annee,valeur
 2024-01,10
 2024-04,20
@@ -65,21 +65,17 @@ def generated_report(csv_data_file):
 
 def test_markdown_rendering(page: Page, generated_report):
     """
-    TC01: Vérifie que la description en Markdown est bien convertie en HTML.
-    Entrée: "**Ceci** est du *Markdown*"
-    Sortie attendue: "<strong>Ceci</strong> est du <em>Markdown</em>"
+    TC01: Markdown in widget description is rendered as HTML (bold/italic/link).
     """
     page.goto(generated_report)
     
-    # 1. Ouvrir l'info box
+    # 1. Open info popover
     page.click(".info-icon")
     
     desc_box = page.locator(".widget-description")
     expect(desc_box).to_be_visible()
     
-    # 2. Vérifier le rendu HTML
-    # Note: Showdown convertit ** en <strong> et * en <em> ou <i>
-    # On vérifie la présence des balises HTML
+    # 2. HTML from Showdown (** -> strong, * -> em/i)
     html_content = desc_box.inner_html()
     
     assert "<strong>Ceci</strong>" in html_content or "<b>Ceci</b>" in html_content
@@ -88,56 +84,52 @@ def test_markdown_rendering(page: Page, generated_report):
 
 def test_date_parsing_and_years_extraction(page: Page, generated_report):
     """
-    TC02: Vérifie que le sélecteur d'année contient bien les années extraites du CSV.
-    CSV: 2024 et 2025.
+    TC02: Year select lists years present in the CSV (2024, 2025).
     """
     page.goto(generated_report)
     
     year_select = page.locator('select[data-testid="widget-year-select"]').first
     
-    # On vérifie les options disponibles
+    # Option labels
     options = year_select.locator("option").all_inner_texts()
     
     assert "2024" in options
     assert "2025" in options
     
-    # Vérifie que la dernière année (2025) est sélectionnée par défaut
+    # Default selection: latest year (2025)
     expect(year_select).to_have_value("2025")
 
 def test_cascade_updates_period_logic(page: Page, generated_report):
     """
-    TC03: Vérifie la logique de cascade des contrôles (Vue -> Valeur).
-    Scénario: Passer de 'Mois' à 'Trimestre'.
+    TC03: Period type change cascades to period value options (month -> quarter).
     """
     page.goto(generated_report)
     
     type_select = page.locator(".ctrl-period-type select")
     value_select = page.locator(".ctrl-period-value select")
     
-    # 1. État initial (Mois)
+    # 1. Initial: month view
     expect(type_select).to_have_value("mois")
-    # Le premier mois (Janvier) ou le mois courant doit être là
+    # First option should be January (or current month in live data)
     expect(value_select.locator("option").first).to_contain_text("Janvier")
     
-    # 2. Changement -> Trimestre
+    # 2. Switch to quarter
     type_select.select_option("trimestre")
     
-    # 3. Vérification de la mise à jour du 2ème select
-    # Il doit contenir T1, T2, T3, T4
+    # 3. Second select should list T1..T4
     expect(value_select.locator("option").first).to_contain_text("T1")
     expect(value_select.locator("option").last).to_contain_text("T4")
 
 def test_filtering_logic_ui_feedback(page: Page, generated_report):
     """
-    TC04: Vérifie que le changement de filtre met à jour le TITRE du graphique.
-    C'est la preuve visuelle que update() a été appelé avec les bons paramètres.
+    TC04: Period filter changes should update the sub-chart title (proves update() ran).
     """
     page.goto(generated_report)
     
-    # On passe en Semestre 2
+    # Semester 2
     page.locator(".ctrl-period-type select").select_option("semestre")
-    page.locator(".ctrl-period-value select").select_option("2") # S2
-    
-    # Le titre du sous-graphique doit afficher "S2"
+    page.locator(".ctrl-period-value select").select_option("2")  # S2
+
+    # Sub-chart title should mention S2
     chart_title = page.locator(".sub-chart h4").last
     expect(chart_title).to_contain_text("S2")

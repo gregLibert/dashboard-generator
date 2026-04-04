@@ -10,10 +10,21 @@ if PROJECT_ROOT not in sys.path:
 
 from dashboard_engine.generator import DashboardGenerator
 
+_RADIAL_WIDGET_CONFIG = {
+    "type": "radial_area",
+    "title": "Radial Cyclic Series",
+    "datasetIndex": 0,
+    "mapping": {
+        "date": "mois_annee",
+        "value": "value",
+    },
+    "options": {
+        "timeUnit": "month",
+        "valueUnit": "°C",
+    },
+}
 
-@pytest.fixture(scope="module")
-def csv_radial_data(tmp_path_factory):
-    csv_content = """mois_annee,value
+_RADIAL_FULL_CSV = """mois_annee,value
 2024-01,10
 2024-01,14
 2024-02,15
@@ -63,57 +74,84 @@ def csv_radial_data(tmp_path_factory):
 2025-12,21
 2025-12,23
 """
-    fn = tmp_path_factory.mktemp("data") / "radial_data.csv"
-    fn.write_text(csv_content, encoding="utf-8")
-    return str(fn)
+
+_RADIAL_DOM_SCENARIOS = [
+    {
+        "id": "nominal_2025_paths_and_svg",
+        "csv": _RADIAL_FULL_CSV,
+        "select_year": "2025",
+        "min_paths": 1,
+        "expect_svg_visible": True,
+    },
+    {
+        "id": "nominal_2024_paths_and_svg",
+        "csv": _RADIAL_FULL_CSV,
+        "select_year": "2024",
+        "min_paths": 1,
+        "expect_svg_visible": True,
+    },
+    {
+        "id": "edge_sparse_two_months_still_draws",
+        "csv": """mois_annee,value
+2025-01,5
+2025-02,9
+""",
+        "select_year": "2025",
+        "min_paths": 1,
+        "expect_svg_visible": True,
+    },
+    {
+        "id": "edge_unusable_non_numeric_value",
+        "csv": """mois_annee,value
+2025-01,not_a_number
+""",
+        "select_year": "2025",
+        "expect_unusable_hint": True,
+    },
+]
 
 
-@pytest.fixture(scope="module")
-def radial_report(csv_radial_data):
+def _write_radial_report(scenario_id: str, csv_content: str) -> str:
     output_dir = os.path.join(PROJECT_ROOT, "output")
-    output_report = os.path.join(output_dir, "_test_radial.html")
-
-    with open(csv_radial_data, "r", encoding="utf-8") as f:
-        csv_content = f.read()
-
-    config = {
-        "title": "QA Radial Area",
-        "widgets": [
-            {
-                "type": "radial_area",
-                "title": "Radial Cyclic Series",
-                "datasetIndex": 0,
-                "mapping": {
-                    "date": "mois_annee",
-                    "value": "value",
-                },
-                "options": {
-                    "timeUnit": "month",
-                    "valueUnit": "°C"
-                },
-            }
-        ],
-    }
-
+    output_report = os.path.join(output_dir, f"_test_radial_{scenario_id}.html")
+    config = {"title": "QA Radial Area", "widgets": [_RADIAL_WIDGET_CONFIG]}
     generator = DashboardGenerator()
     html_content = generator.generate(config, [csv_content])
-
     os.makedirs(output_dir, exist_ok=True)
     with open(output_report, "w", encoding="utf-8") as f:
         f.write(html_content)
-
     return "file:///{path}".format(path=output_report.replace(os.sep, "/"))
 
 
-def test_radial_area_renders_paths(page: Page, radial_report):
-    page.goto(radial_report)
+@pytest.fixture(scope="module")
+def radial_case_bundle(request):
+    case = request.param
+    url = _write_radial_report(case["id"], case["csv"])
+    return {**case, "file_url": url}
+
+
+@pytest.mark.parametrize(
+    "radial_case_bundle",
+    _RADIAL_DOM_SCENARIOS,
+    indirect=True,
+    ids=[c["id"] for c in _RADIAL_DOM_SCENARIOS],
+)
+def test_radial_area_widget_dom_matches_data_scenario(page: Page, radial_case_bundle):
+    """Radial area DOM reflects the dataset: g.radial-area-layer path + visible svg, or unusable hint."""
+    page.goto(radial_case_bundle["file_url"])
 
     year_select = page.locator('select[data-testid="widget-year-select"]').first
-    year_select.select_option("2025")
+    year_select.select_option(radial_case_bundle["select_year"])
+
+    if radial_case_bundle.get("expect_unusable_hint"):
+        hint = page.locator(".sub-chart .hint")
+        expect(hint).to_be_visible()
+        expect(hint).to_contain_text("Aucune donnée exploitable")
+        return
 
     svg = page.locator(".sub-chart svg")
-    expect(svg).to_be_visible()
+    if radial_case_bundle.get("expect_svg_visible"):
+        expect(svg).to_be_visible()
 
     paths = svg.locator("g.radial-area-layer path")
-    assert paths.count() >= 1
-
+    assert paths.count() >= radial_case_bundle["min_paths"]

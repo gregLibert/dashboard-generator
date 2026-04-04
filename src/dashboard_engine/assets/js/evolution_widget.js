@@ -1,8 +1,3 @@
-const EVOLUTION_CONSTANTS = {
-    CHART_HEIGHT_PX: 380,
-    DEFAULT_INNER_WIDTH: 800,
-};
-
 class EvolutionWidget extends BaseWidget {
 
     initLayout() {
@@ -15,14 +10,16 @@ class EvolutionWidget extends BaseWidget {
         this.vizWrapper.innerHTML = '';
         const container = document.createElement('div');
         container.className = 'sub-chart';
-        container.innerHTML = `<div style="height:${EVOLUTION_CONSTANTS.CHART_HEIGHT_PX}px"></div>`;
+        const L = Utils.CHART_LAYOUT;
+        container.innerHTML = `<div style="height:${L.STANDARD_PLOT_HEIGHT}px"></div>`;
         this.vizWrapper.appendChild(container);
 
         const yearN = this.state.year;
         const yearN1 = yearN - 1;
 
-        const rawN = this.rawData.filter(d => d.year === yearN);
-        const rawN1 = this.state.yoy ? this.rawData.filter(d => d.year === yearN1) : [];
+        const rawN = this.rawData.filter((d) => d.year === yearN);
+        const yoyYears = Utils.calendarYearsForYoYChart(yearN, this.state.yoy);
+        const rawN1 = yoyYears.length > 1 ? this.rawData.filter((d) => d.year === yearN1) : [];
 
         this.drawLineChart(container.querySelector('div'), rawN, rawN1);
     }
@@ -46,8 +43,9 @@ class EvolutionWidget extends BaseWidget {
     }
 
     drawLineChart(domNode, dataN, dataN1) {
-        const width = domNode.clientWidth || EVOLUTION_CONSTANTS.DEFAULT_INNER_WIDTH;
-        const height = EVOLUTION_CONSTANTS.CHART_HEIGHT_PX;
+        const L = Utils.CHART_LAYOUT;
+        const width = domNode.clientWidth || L.DEFAULT_INNER_WIDTH;
+        const height = L.STANDARD_PLOT_HEIGHT;
         const margin = { top: 30, right: 30, bottom: 30, left: 50 };
 
         const { mapN, mapN1, dataLineN, dataLineN1, yMax } = this.buildMonthlySeries(dataN, dataN1);
