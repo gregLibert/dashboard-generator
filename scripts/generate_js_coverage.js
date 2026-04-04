@@ -3,101 +3,113 @@ const fs = require('fs');
 const path = require('path');
 const { fileURLToPath } = require('url');
 
+const CONSTANTS = {
+    COVERAGE_REPORT_NAME: 'Dashboard Engine Coverage',
+    OUTPUT_DIR_COVERAGE: 'output/coverage-js',
+    JS_COVERAGE_SUMMARY_FILENAME: 'js-coverage-summary.json',
+    OUTPUT_DIR: 'output',
+    VIRTUAL_JS_PATH: 'src/dashboard_engine_logic.js',
+    VIRTUAL_SOURCE_FILTER_SUBSTRING: 'dashboard_engine_logic.js',
+    ENCODING_UTF8: 'utf-8',
+    FILE_URL_PREFIX: 'file:',
+    HTML_EXTENSION: '.html',
+    SCRIPT_MODULE_REGEX: /<script[^>]*type="module"[^>]*>([\s\S]*?)<\/script>/,
+    REPORT_TYPES: ['v8', 'console-summary'],
+};
+
+const summaryPath = path.resolve(CONSTANTS.OUTPUT_DIR, CONSTANTS.JS_COVERAGE_SUMMARY_FILENAME);
+
 const coverageOptions = {
-    name: 'Dashboard Engine Coverage',
-    outputDir: 'output/coverage-js',
-    reports: ['v8', 'console-summary'],
-    
-    // On ne veut voir que notre fichier JS virtuel propre
-    entryFilter: (entry) => {
-        return entry.url.includes('dashboard_engine_logic.js');
-    },
-    
+    name: CONSTANTS.COVERAGE_REPORT_NAME,
+    outputDir: CONSTANTS.OUTPUT_DIR_COVERAGE,
+    reports: CONSTANTS.REPORT_TYPES,
+
+    entryFilter: (entry) => entry.url.includes(CONSTANTS.VIRTUAL_SOURCE_FILTER_SUBSTRING),
+
     onEnd: (results) => {
         const summary = results.summary;
-        const coveragePct = (summary && summary.bytes) ? summary.bytes.pct : 0;
-        
-        const summaryPath = path.resolve('output/js-coverage-summary.json');
+        const coveragePct = summary && summary.bytes ? summary.bytes.pct : 0;
+
         fs.writeFileSync(summaryPath, JSON.stringify({ pct: coveragePct }));
-        console.log(`[JS Generation] Score Final : ${coveragePct}%`);
-    }
+        console.log(`[JS Generation] Final coverage: ${coveragePct}%`);
+    },
 };
 
 const rawDataPath = process.argv[2];
 if (!rawDataPath || !fs.existsSync(rawDataPath)) {
-    console.error(`[JS Generation] Erreur: Fichier brut introuvable.`);
+    console.error('[JS Generation] Error: raw coverage file not found.');
     process.exit(1);
 }
 
-console.log(`[JS Generation] Lecture des données brutes...`);
-let reportData = JSON.parse(fs.readFileSync(rawDataPath));
+let reportData;
+try {
+    reportData = JSON.parse(fs.readFileSync(rawDataPath, CONSTANTS.ENCODING_UTF8));
+} catch (err) {
+    console.error('[JS Generation] Error: could not parse raw coverage JSON:', err.message);
+    process.exit(1);
+}
 
-const VIRTUAL_FILENAME = "src/dashboard_engine_logic.js";
+console.log('[JS Generation] Reading raw coverage data...');
+
 let sharedSourceCode = null;
 const mergedFunctions = [];
 
-reportData.forEach(entry => {
-    // On ne traite que les fichiers HTML locaux
-    if (entry.url && entry.url.startsWith('file:') && entry.url.endsWith('.html')) {
+reportData.forEach((entry) => {
+    if (
+        entry.url &&
+        entry.url.startsWith(CONSTANTS.FILE_URL_PREFIX) &&
+        entry.url.endsWith(CONSTANTS.HTML_EXTENSION)
+    ) {
         try {
             const filePath = fileURLToPath(entry.url);
-            
-            // 1. Lecture du fichier
-            let fileContent = fs.readFileSync(filePath, 'utf-8');
 
-            // 2. Extraction du contenu JS (Regex capture le groupe 1)
-            const scriptTagRegex = /<script[^>]*type="module"[^>]*>([\s\S]*?)<\/script>/;
-            const match = scriptTagRegex.exec(fileContent);
+            let fileContent = fs.readFileSync(filePath, CONSTANTS.ENCODING_UTF8);
+
+            const match = CONSTANTS.SCRIPT_MODULE_REGEX.exec(fileContent);
 
             if (match) {
-                // match[1] est le contenu EXACT entre les balises
                 let jsContent = match[1];
 
-                // 3. NORMALISATION CRITIQUE (Windows \r\n -> Unix \n)
-                // C'est ce qui corrige le delta de 12 caractères que tu as observé !
                 jsContent = jsContent.replace(/\r\n/g, '\n');
 
-                // On sauvegarde ce code comme référence pour le rapport
                 if (!sharedSourceCode) {
                     sharedSourceCode = jsContent;
                 }
 
-                // 4. Pas de calcul savant d'offset !
-                // V8 renvoie des coordonnées relatives au début de ce bloc.
-                // Comme 'jsContent' commence aussi au début de ce bloc, ça matche direct.
-                // On ajoute les fonctions telles quelles.
-                
-                entry.functions.forEach(func => {
-                    // On ne garde que les fonctions qui semblent valides (nommées ou blocs)
-                    // et qui rentrent dans la taille du script (sécurité)
-                    const validRanges = func.ranges.filter(r => r.endOffset <= jsContent.length);
-                    
+                entry.functions.forEach((func) => {
+                    const validRanges = func.ranges.filter((r) => r.endOffset <= jsContent.length);
+
                     if (validRanges.length > 0) {
                         mergedFunctions.push({
                             functionName: func.functionName,
                             isBlockCoverage: func.isBlockCoverage,
-                            ranges: validRanges 
+                            ranges: validRanges,
                         });
                     }
                 });
             }
         } catch (err) {
-            console.error(`[Warn] Erreur traitement fichier ${entry.url}:`, err.message);
+            console.error(`[JS Generation] Error processing file ${entry.url}:`, err.message);
+            process.exit(1);
         }
     }
 });
 
-// Création de l'entrée unique fusionnée
 const finalEntries = [];
 if (mergedFunctions.length > 0 && sharedSourceCode) {
-    console.log(`[JS Generation] Fusion de ${mergedFunctions.length} traces sur le fichier virtuel.`);
+    console.log(
+        `[JS Generation] Merging ${mergedFunctions.length} trace(s) into virtual file.`
+    );
     finalEntries.push({
-        url: VIRTUAL_FILENAME,
+        url: CONSTANTS.VIRTUAL_JS_PATH,
         source: sharedSourceCode,
-        functions: mergedFunctions
+        functions: mergedFunctions,
     });
 } else {
-    console.error("❌ Aucune donnée JS extraite. Vérifiez les balises <script type='module'>.");
+    console.error(
+        "[JS Generation] No JS data extracted. Check <script type='module'> tags in the HTML."
+    );
+    process.exit(1);
 }
 
 const mcr = MCR(coverageOptions);

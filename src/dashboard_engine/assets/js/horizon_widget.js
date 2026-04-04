@@ -1,6 +1,7 @@
-// ==========================================
-// RIDGELINE HORIZON WIDGET
-// ==========================================
+const HORIZON_CONSTANTS = {
+    DEFAULT_INNER_WIDTH: 800,
+};
+
 class HorizonWidget extends BaseWidget {
 
     initLayout() {
@@ -16,7 +17,6 @@ class HorizonWidget extends BaseWidget {
         this.vizWrapper.innerHTML = '';
         
         const year = this.state.year;
-        
         const data = this.rawData.filter(d => !d.year || d.year === year);
 
         const container = document.createElement('div');
@@ -27,7 +27,7 @@ class HorizonWidget extends BaseWidget {
                                <div class="horizon-wrapper" style="width:100%;"></div>`;
         this.vizWrapper.appendChild(container);
 
-        if(data.length === 0) {
+        if (data.length === 0) {
             container.querySelector('.horizon-wrapper').innerHTML = '<p class="hint">Aucune donnée pour cette année</p>';
             return;
         }
@@ -35,102 +35,117 @@ class HorizonWidget extends BaseWidget {
         this.drawRidgeline(container.querySelector('.horizon-wrapper'), data);
     }
 
-    drawRidgeline(domNode, data) {
+    /**
+     * Prepare grouped data and basic scales for the horizon chart.
+     * Pure computation to ease table-driven testing.
+     */
+    buildRidgelineModel(data) {
         const { x: xCol, y: yCol, value: valCol } = this.config.mapping;
         const bands = this.config.options?.bands || 3;
         const rowHeight = this.config.options?.height || 40;
-        const colorBase = this.config.options?.color || "#08519c";
-        
-        const xAxisMode = this.config.options?.xAxisMode || "linear"; // "linear" ou "weekly"
+        const colorBase = this.config.options?.color || UI_THEME.defaultHorizonBlue;
+        const xAxisMode = this.config.options?.xAxisMode || "linear";
 
-        const margin = {top: 5, right: 20, bottom: 25, left: 100};
-        const width = domNode.clientWidth || 800;
+        const margin = { top: 5, right: 20, bottom: 25, left: 100 };
 
-        // Groupement par ligne (Y)
         const groups = d3.group(data, d => d[yCol]);
         const groupKeys = Array.from(groups.keys());
-        const totalHeight = groupKeys.length * rowHeight;
 
-        // --- AXE X ---
+        const xDomain = d3.extent(data, d => +d[xCol]);
+        const maxVal = d3.max(data, d => +d[valCol]) || 0;
+
+        return {
+            bands,
+            rowHeight,
+            colorBase,
+            xAxisMode,
+            margin,
+            groups,
+            groupKeys,
+            xDomain,
+            maxVal
+        };
+    }
+
+    drawRidgeline(domNode, data) {
+        const { x: xCol, y: yCol, value: valCol } = this.config.mapping;
+        const model = this.buildRidgelineModel(data);
+
+        const width = domNode.clientWidth || HORIZON_CONSTANTS.DEFAULT_INNER_WIDTH;
+        const totalHeight = model.groupKeys.length * model.rowHeight;
+
         const x = d3.scaleLinear()
-            .domain(d3.extent(data, d => +d[xCol]))
-            .range([margin.left, width - margin.right]);
+            .domain(model.xDomain)
+            .range([model.margin.left, width - model.margin.right]);
 
-        // --- AXE Y (Hauteur des pics) ---
-        const maxVal = d3.max(data, d => +d[valCol]);
         const y = d3.scaleLinear()
-            .domain([0, maxVal])
-            .range([rowHeight, rowHeight - (rowHeight * bands)]);
+            .domain([0, model.maxVal])
+            .range([model.rowHeight, model.rowHeight - (model.rowHeight * model.bands)]);
 
-        // Générateur d'aire
         const area = d3.area()
             .curve(d3.curveBasis)
             .x(d => x(+d[xCol]))
-            .y0(rowHeight)
+            .y0(model.rowHeight)
             .y1(d => y(+d[valCol]));
 
         const uid = `ridge-${Math.random().toString(36).substr(2, 5)}`;
         const svg = d3.select(domNode).append("svg")
-            .attr("viewBox", [0, 0, width, totalHeight + margin.bottom])
+            .attr("viewBox", [0, 0, width, totalHeight + model.margin.bottom])
             .style("width", "100%")
             .style("height", "auto");
 
-        const color = d3.scaleSequential(d3.interpolateRgb("#ffffff", colorBase))
-                        .domain([-0.5, bands]);
+        const color = d3.scaleSequential(d3.interpolateRgb(UI_THEME.white, model.colorBase))
+                        .domain([-0.5, model.bands]);
 
-        // --- DESSIN DES LIGNES ---
-        groupKeys.forEach((key, index) => {
-            const groupData = groups.get(key).sort((a,b) => +a[xCol] - +b[xCol]);
-            const g = svg.append("g").attr("transform", `translate(0, ${index * rowHeight})`);
+        model.groupKeys.forEach((key, index) => {
+            const groupData = model.groups.get(key).sort((a, b) => +a[xCol] - +b[xCol]);
+            const g = svg.append("g").attr("transform", `translate(0, ${index * model.rowHeight})`);
 
-            // Clip Path pour couper ce qui dépasse en haut de la ligne
             g.append("defs").append("clipPath")
                 .attr("id", `${uid}-${index}`)
                 .append("rect")
-                .attr("x", margin.left)
+                .attr("x", model.margin.left)
                 .attr("y", 0)
-                .attr("width", width - margin.left - margin.right)
-                .attr("height", rowHeight);
+                .attr("width", width - model.margin.left - model.margin.right)
+                .attr("height", model.rowHeight);
 
             const clipG = g.append("g").attr("clip-path", `url(#${uid}-${index})`);
 
-            // Boucle des bandes Horizon
-            for (let i = 0; i < bands; i++) {
+            for (let i = 0; i < model.bands; i++) {
                 clipG.append("path")
                     .datum(groupData)
                     .attr("fill", color(i))
                     .attr("d", area)
-                    .attr("transform", `translate(0, ${i * rowHeight})`);
+                    .attr("transform", `translate(0, ${i * model.rowHeight})`);
             }
 
-            // Label à gauche
             g.append("text")
-                .attr("x", margin.left - 10)
-                .attr("y", rowHeight / 2)
+                .attr("x", model.margin.left - 10)
+                .attr("y", model.rowHeight / 2)
                 .attr("dy", "0.35em")
                 .attr("text-anchor", "end")
                 .attr("font-size", "10px")
                 .text(key);
             
-            // --- GRILLE VERTICALE (Si mode weekly) ---
-            if (xAxisMode === "weekly") {
-                // Traits verticaux tous les jours (24h, 48h...)
-                [24, 48, 72, 96, 120, 144].forEach(t => {
+            if (model.xAxisMode === "weekly") {
+                const gridHours = [24, 48, 72, 96, 120, 144];
+                gridHours.forEach(t => {
                     g.append("line")
                         .attr("x1", x(t)).attr("x2", x(t))
-                        .attr("y1", 0).attr("y2", rowHeight)
+                        .attr("y1", 0).attr("y2", model.rowHeight)
                         .attr("stroke", "rgba(0,0,0,0.05)");
                 });
             }
         });
 
-        // --- AXE X LOGIQUE (Labels) ---
         let xAxis = d3.axisBottom(x).ticks(width / 60);
         
-        if (xAxisMode === "weekly") {
+        if (model.xAxisMode === "weekly") {
             const days = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-            xAxis.tickValues([0, 24, 48, 72, 96, 120, 144])
-                 .tickFormat((d, i) => days[i] || "");
+            const hours = [0, 24, 48, 72, 96, 120, 144];
+            xAxis = xAxis
+                .tickValues(hours)
+                .tickFormat((d, i) => days[i] || "");
         }
 
         svg.append("g")

@@ -204,7 +204,7 @@ def test_TC05_sankey_empty_year_message(page: Page, sankey_report):
 
     # 1. On change l'année pour 2024 via le menu déroulant
     # On cherche le sélecteur dans le groupe de contrôle "Année"
-    year_select = page.locator(".control-group", has_text="Année").locator("select")
+    year_select = page.locator('select[data-testid="widget-year-select"]').first
     year_select.select_option("2024")
 
     # 2. Vérification de l'année N (2024) -> Doit avoir un SVG

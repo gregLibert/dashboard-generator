@@ -119,7 +119,7 @@ def test_evolution_graph_yoy_toggling(page: Page, generated_report):
     page.goto(generated_report)
     
     # Sélectionner 2025 pour être sûr d'avoir N (2025) et N-1 (2024)
-    page.locator(".control-group", has_text="Année").locator("select").select_option("2025")
+    page.locator('select[data-testid="widget-year-select"]').first.select_option("2025")
     
     container = page.locator(".sub-chart svg")
     
@@ -155,7 +155,7 @@ def test_data_aggregation_accuracy(page: Page, generated_report):
     page.goto(generated_report)
     
     # Setup : Année 2025
-    page.locator(".control-group", has_text="Année").locator("select").select_option("2025")
+    page.locator('select[data-testid="widget-year-select"]').first.select_option("2025")
     
     # On cible les points (cercles) de la courbe N
     # Le JS dessine des cercles avec la classe 'dotN' (ou implicitement via selectAll)
@@ -191,7 +191,7 @@ def test_evolution_legend_labels(page: Page, generated_report):
     page.goto(generated_report)
     
     # On se met en 2025 avec YoY activé
-    page.locator(".control-group", has_text="Année").locator("select").select_option("2025")
+    page.locator('select[data-testid="widget-year-select"]').first.select_option("2025")
     page.locator(".ctrl-yoy input").check()
     
     # On cible le SVG
@@ -245,7 +245,7 @@ def test_evolution_n_minus_1_interactivity(page: Page, generated_report):
     page.goto(generated_report)
     
     # Setup 2025 + YoY
-    page.locator(".control-group", has_text="Année").locator("select").select_option("2025")
+    page.locator('select[data-testid="widget-year-select"]').first.select_option("2025")
     page.locator(".ctrl-yoy input").check()
 
     container = page.locator(".sub-chart svg")
@@ -275,7 +275,7 @@ def test_evolution_percentage_labels(page: Page, generated_report, csv_data_file
     Evolution = (4600 - 3500) / 3500 * 100 = +31.42% -> Arrondi +31%
     """
     page.goto(generated_report)
-    page.locator(".control-group", has_text="Année").locator("select").select_option("2025")
+    page.locator('select[data-testid="widget-year-select"]').first.select_option("2025")
     
     # On cherche le text label au dessus du point de Janvier
     # Le label est un <text> avec ancre "middle" et une couleur (vert/rouge)

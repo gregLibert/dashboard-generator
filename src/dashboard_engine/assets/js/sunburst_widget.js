@@ -1,22 +1,20 @@
-// ==========================================
-// ZOOMABLE SUNBURST WIDGET
-// ==========================================
+const SUNBURST_CONSTANTS = {
+    BREADCRUMB_ROOT_LABEL: 'Total',
+};
+
 class SunburstWidget extends BaseWidget {
 
     initLayout() {
         super.initLayout();
-        // Breadcrumbs setup
         this.breadcrumbDiv = document.createElement('div');
         this.breadcrumbDiv.className = 'breadcrumbs';
-        this.breadcrumbDiv.innerHTML = '<span class="crumb active">Total</span>';
+        this.breadcrumbDiv.innerHTML = `<span class="crumb active">${SUNBURST_CONSTANTS.BREADCRUMB_ROOT_LABEL}</span>`;
 
         this.vizWrapper.parentNode.insertBefore(this.breadcrumbDiv, this.vizWrapper);
         
         this.chartControllers = [];
 
-        // FIX COULEUR : Initialisation unique de l'échelle de couleur.
-        // Utilisation de schemePaired pour avoir 12 couleurs distinctes et stables.
-        this.colorScale = d3.scaleOrdinal(d3.schemePaired);
+        this.colorScale = d3.scaleOrdinal(UI_THEME.schemePaired);
     }
 
     update() {
@@ -77,32 +75,37 @@ class SunburstWidget extends BaseWidget {
         });
     }
 
-    drawZoomableSunburst(domNode, data) {
+    /**
+     * Build hierarchical tree data from flat rows and mapping configuration.
+     * Pure computation to facilitate table-driven tests.
+     */
+    buildHierarchy(data) {
         const { hierarchy, value } = this.config.mapping;
-        
-        const width = 400; 
-        const height = 400;
-        const radius = width / 6;
 
-        // 1. Préparation des données brutes
-        const rolls = d3.rollup(data, 
-            v => d3.sum(v, d => +d[value]), 
+        const rolls = d3.rollup(
+            data,
+            v => d3.sum(v, d => +d[value]),
             ...hierarchy.map(col => d => d[col] || "N/A")
         );
 
         const makeTree = (name, val) => {
             if (val instanceof Map) return { name, children: Array.from(val, ([n, v]) => makeTree(n, v)) };
-            return { name, value: val }; 
+            return { name, value: val };
         };
-        
+
         const treeData = makeTree("Total", rolls);
-        const root = d3.hierarchy(treeData);
+        return d3.hierarchy(treeData);
+    }
 
-        // 2. Calcul Standard (Linéaire)
-        // root.sum parcourt l'arbre et additionne les valeurs des enfants pour chaque parent.
+    drawZoomableSunburst(domNode, data) {
+        const width = 400; 
+        const height = 400;
+        const radius = width / 6;
+
+        // 1. Build hierarchical data and compute linear values.
+        const root = this.buildHierarchy(data);
+
         root.sum(d => d.value);
-
-        // Tri par valeur descendante pour placer les plus gros éléments à "midi"
         root.sort((a, b) => b.value - a.value);
 
         const partition = d3.partition().size([2 * Math.PI, root.height + 1]);
@@ -110,7 +113,7 @@ class SunburstWidget extends BaseWidget {
         partition(root);
 
         const format = Utils.fmtNumber;
-        const totalValue = root.value; // La valeur totale est maintenant directement accessible
+        const totalValue = root.value;
 
         const svg = d3.select(domNode).append("svg")
             .attr("viewBox", [-width / 2, -height / 2, width, height])
@@ -128,7 +131,6 @@ class SunburstWidget extends BaseWidget {
             .selectAll("path")
             .data(root.descendants().slice(1)) 
             .join("path")
-            // Couleur stable via l'instance créée dans initLayout
             .attr("fill", d => this.colorScale(d.data.name)) 
             .attr("fill-opacity", d => arcVisible(d.current) ? (d.children ? 0.8 : 0.6) : 0)
             .attr("pointer-events", d => arcVisible(d.current) ? "auto" : "none")
@@ -143,11 +145,11 @@ class SunburstWidget extends BaseWidget {
                 this.broadcastZoom(pathNames);
             });
 
-        // Tooltip : Simple et précis (Linéaire uniquement)
+        // Tooltip: display linear value and percentage vs total.
         path.append("title")
             .text(d => {
                 const pathStr = d.ancestors().reverse().slice(1).map(n => n.data.name).join(" > ");
-                const realVal = d.value; // d.value est ici la vraie valeur linéaire
+                const realVal = d.value;
                 
                 let ratioStr = "";
                 if (totalValue > 0) {
@@ -183,7 +185,7 @@ class SunburstWidget extends BaseWidget {
                 this.broadcastZoom(pathNames);
             });
 
-        // Transition interne (Animation Zoom)
+        // Internal zoom transition.
         const internalTransition = (targetNode) => {
             parent.datum(targetNode.parent || root);
 

@@ -1,6 +1,8 @@
-// ==========================================
-// EVOLUTION WIDGET
-// ==========================================
+const EVOLUTION_CONSTANTS = {
+    CHART_HEIGHT_PX: 380,
+    DEFAULT_INNER_WIDTH: 800,
+};
+
 class EvolutionWidget extends BaseWidget {
 
     initLayout() {
@@ -13,8 +15,7 @@ class EvolutionWidget extends BaseWidget {
         this.vizWrapper.innerHTML = '';
         const container = document.createElement('div');
         container.className = 'sub-chart';
-        // Augmentation légère de la hauteur pour les labels %
-        container.innerHTML = `<div style="height:380px"></div>`;
+        container.innerHTML = `<div style="height:${EVOLUTION_CONSTANTS.CHART_HEIGHT_PX}px"></div>`;
         this.vizWrapper.appendChild(container);
 
         const yearN = this.state.year;
@@ -26,65 +27,69 @@ class EvolutionWidget extends BaseWidget {
         this.drawLineChart(container.querySelector('div'), rawN, rawN1);
     }
 
-    drawLineChart(domNode, dataN, dataN1) {
+    /**
+     * Aggregate monthly values for N and N-1 and build series.
+     * Pure computation, suitable for table-driven tests.
+     */
+    buildMonthlySeries(dataN, dataN1) {
         const { value } = this.config.mapping;
-        const width = domNode.clientWidth || 800;
-        const height = 380;
-        const margin = { top: 30, right: 30, bottom: 30, left: 50 };
-
-        // 1. Data Preparation
-        const agg = (ds) => d3.rollup(ds, v => d3.sum(v, d => +d[value]), d => d.month);
-        const mapN = agg(dataN);
-        const mapN1 = agg(dataN1);
+        const aggregate = (ds) => d3.rollup(ds, v => d3.sum(v, d => +d[value]), d => d.month);
+        const mapN = aggregate(dataN);
+        const mapN1 = aggregate(dataN1);
         const dataLineN = Array.from(mapN).sort((a, b) => a[0] - b[0]);
         const dataLineN1 = Array.from(mapN1).sort((a, b) => a[0] - b[0]);
 
-        // 2. Scales
         const allVals = [...mapN.values(), ...mapN1.values()];
-        const yMax = allVals.length > 0 ? d3.max(allVals) * 1.1 : 10; // +10% padding top for labels
+        const yMax = allVals.length > 0 ? d3.max(allVals) * 1.1 : 10;
+
+        return { mapN, mapN1, dataLineN, dataLineN1, yMax };
+    }
+
+    drawLineChart(domNode, dataN, dataN1) {
+        const width = domNode.clientWidth || EVOLUTION_CONSTANTS.DEFAULT_INNER_WIDTH;
+        const height = EVOLUTION_CONSTANTS.CHART_HEIGHT_PX;
+        const margin = { top: 30, right: 30, bottom: 30, left: 50 };
+
+        const { mapN, mapN1, dataLineN, dataLineN1, yMax } = this.buildMonthlySeries(dataN, dataN1);
+
         const x = d3.scaleLinear().domain([1, 12]).range([margin.left, width - margin.right]);
         const y = d3.scaleLinear().domain([0, yMax]).nice().range([height - margin.bottom, margin.top]);
 
-        // 3. SVG Init
         const svg = d3.select(domNode).append("svg").attr("viewBox", [0, 0, width, height]);
         this.drawAxes(svg, x, y, height, margin);
 
-        // 4. Draw Curves & Dots
         const line = d3.line().x(d => x(d[0])).y(d => y(d[1]));
         
         if (mapN1.size > 0) {
             this.drawSeries(svg, dataLineN1, line, x, y, { 
-                color: "#1f77b4", dash: "5,5", width: 2, opacity: 0.6, label: `Année ${this.state.year - 1}` 
+                color: UI_THEME.primary, dash: "5,5", width: 2, opacity: 0.6, label: `Année ${this.state.year - 1}` 
             });
         }
         
         if (mapN.size > 0) {
             this.drawSeries(svg, dataLineN, line, x, y, { 
-                color: "#1f77b4", dash: null, width: 3, opacity: 1, label: `Année ${this.state.year}` 
+                color: UI_THEME.primary, dash: null, width: 3, opacity: 1, label: `Année ${this.state.year}` 
             });
             
-            // 5. Draw Evolution Labels (Specific to Year N)
             if (mapN1.size > 0) this.drawEvolutionLabels(svg, dataLineN, mapN1, x, y);
         }
 
-        // 6. Draw Legend (Last to be on top)
         this.drawLegend(svg, width, margin);
     }
 
     drawAxes(svg, x, y, height, margin) {
         svg.append("g").attr("transform", `translate(0,${height - margin.bottom})`)
             .call(d3.axisBottom(x).ticks(12).tickFormat(m => Utils.moisFR[m - 1] ? Utils.moisFR[m - 1].substring(0, 3) : m))
-            .call(g => g.select(".domain").attr("stroke", "#ddd"))
-            .call(g => g.selectAll("line").attr("stroke", "#eee"));
+            .call(g => g.select(".domain").attr("stroke", UI_THEME.axisDomain))
+            .call(g => g.selectAll("line").attr("stroke", UI_THEME.gridMajor));
 
         svg.append("g").attr("transform", `translate(${margin.left},0)`)
             .call(d3.axisLeft(y).ticks(5).tickFormat(d => Utils.fmtNumber.format(d)))
             .call(g => g.select(".domain").remove())
-            .call(g => g.selectAll("line").attr("stroke", "#eee").attr("stroke-dasharray", "2,2"));
+            .call(g => g.selectAll("line").attr("stroke", UI_THEME.gridMajor).attr("stroke-dasharray", "2,2"));
     }
 
     drawSeries(svg, data, lineGen, x, y, opts) {
-        // Path
         svg.append("path").datum(data)
             .attr("fill", "none")
             .attr("stroke", opts.color)
@@ -95,19 +100,18 @@ class EvolutionWidget extends BaseWidget {
         
         const className = `dot-${opts.dash ? 'N1' : 'N'}`;
 
-        // Dots (Overlay Buttons)
         svg.selectAll(`.${className}`)
             .data(data).join("circle")
             .attr("class", className)
             .attr("cx", d => x(d[0]))
             .attr("cy", d => y(d[1]))
             .attr("r", 4)
-            .attr("fill", "white") // Hollow circle effect
+            .attr("fill", UI_THEME.white)
             .attr("stroke", opts.color)
             .attr("stroke-width", 2)
             .style("cursor", "pointer")
             .on("mouseover", function() { d3.select(this).attr("r", 6).attr("fill", opts.color); })
-            .on("mouseout", function() { d3.select(this).attr("r", 4).attr("fill", "white"); })
+            .on("mouseout", function() { d3.select(this).attr("r", 4).attr("fill", UI_THEME.white); })
             .append("title")
             .text(d => `${opts.label} - ${Utils.moisFR[d[0] - 1]}\nVal: ${Utils.fmtNumber.format(d[1])}`);
     }
@@ -120,7 +124,7 @@ class EvolutionWidget extends BaseWidget {
             .data(dataN)
             .join("text")
             .attr("x", d => x(d[0]))
-            .attr("y", d => y(d[1]) - 10) // Slightly above the point
+            .attr("y", d => y(d[1]) - 10)
             .attr("text-anchor", "middle")
             .each(function(d) {
                 const month = d[0];
@@ -130,7 +134,7 @@ class EvolutionWidget extends BaseWidget {
                 if (valN1 && valN1 > 0) {
                     const pct = ((valN - valN1) / valN1) * 100;
                     const symbol = pct > 0 ? "+" : "";
-                    const color = pct >= 0 ? "#2e7d32" : "#c62828"; // Green / Red
+                    const color = pct >= 0 ? UI_THEME.positiveDelta : UI_THEME.negativeDelta;
                     
                     d3.select(this)
                         .text(`${symbol}${Math.round(pct)}%`)
@@ -142,22 +146,19 @@ class EvolutionWidget extends BaseWidget {
     drawLegend(svg, width, margin) {
         const legendG = svg.append("g").attr("transform", `translate(${width - 110}, ${margin.top})`);
 
-        // Background Box to prevent curve overlap
         legendG.append("rect")
             .attr("x", -10).attr("y", -10)
             .attr("width", 120).attr("height", 50)
-            .attr("fill", "rgba(255, 255, 255, 0.9)")
-            .attr("stroke", "#ddd")
+            .attr("fill", UI_THEME.legendBackdrop)
+            .attr("stroke", UI_THEME.axisDomain)
             .attr("rx", 4);
 
-        // Item N
-        legendG.append("text").attr("x", 25).attr("y", 5).text(`Année ${this.state.year}`).attr("font-size", "11px").attr("fill", "#1f77b4");
-        legendG.append("line").attr("x1", 0).attr("y1", 2).attr("x2", 20).attr("y2", 2).attr("stroke", "#1f77b4").attr("stroke-width", 3);
+        legendG.append("text").attr("x", 25).attr("y", 5).text(`Année ${this.state.year}`).attr("font-size", "11px").attr("fill", UI_THEME.primary);
+        legendG.append("line").attr("x1", 0).attr("y1", 2).attr("x2", 20).attr("y2", 2).attr("stroke", UI_THEME.primary).attr("stroke-width", 3);
 
-        // Item N-1
         if (this.state.yoy) {
-            legendG.append("text").attr("x", 25).attr("y", 25).text(`Année ${this.state.year - 1}`).attr("font-size", "11px").attr("fill", "#1f77b4").attr("opacity", 0.7);
-            legendG.append("line").attr("x1", 0).attr("y1", 22).attr("x2", 20).attr("y2", 22).attr("stroke", "#1f77b4").attr("stroke-width", 2).attr("stroke-dasharray", "4,2");
+            legendG.append("text").attr("x", 25).attr("y", 25).text(`Année ${this.state.year - 1}`).attr("font-size", "11px").attr("fill", UI_THEME.primary).attr("opacity", 0.7);
+            legendG.append("line").attr("x1", 0).attr("y1", 22).attr("x2", 20).attr("y2", 22).attr("stroke", UI_THEME.primary).attr("stroke-width", 2).attr("stroke-dasharray", "4,2");
         }
     }
 }

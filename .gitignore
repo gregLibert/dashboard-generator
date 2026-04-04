@@ -1,35 +1,101 @@
-# --- Python & Build Artifacts ---
+# =============================================================================
+# Python
+# =============================================================================
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
 build/
 dist/
+*.egg
 *.egg-info/
 .eggs/
+pip-wheel-metadata/
+*.manifest
+*.spec
 
-# --- JS ---
+# =============================================================================
+# Python — tests & coverage
+# =============================================================================
+.pytest_cache/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.dmypy.json
+dmypy.json
+
+.coverage
+.coverage.*
+coverage.xml
+**/htmlcov/
+
+# =============================================================================
+# JavaScript / Node
+# =============================================================================
 node_modules/
+.npm/
+.yarn/
+.pnp.*
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
 
-# --- IDE Settings ---
+# Typical JS coverage / bundler artifacts
+.nyc_output/
+**/coverage/
+*.lcov
+
+# =============================================================================
+# Playwright
+# =============================================================================
+test-results/
+playwright-report/
+**/blob-report/
+playwright/.cache/
+
+# =============================================================================
+# Project — generated dashboards, V8 raw JSON, JS coverage reports (monocart)
+# =============================================================================
+output/
+
+# =============================================================================
+# IDE & editors
+# =============================================================================
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.cursor/
 
-# --- Mac OS junk ---
+# =============================================================================
+# Operating system
+# =============================================================================
 .DS_Store
+Thumbs.db
+Desktop.ini
 
-# Environnement
+# =============================================================================
+# Environment & secrets
+# =============================================================================
 venv/
 .env
+.env.*
+!.env.example
 
-# Tests & Output
-.pytest_cache/
+# =============================================================================
+# Local scratch / dumps (not part of the product)
+# =============================================================================
+audit_code_dump.txt
+*_code_dump.txt
 
-output/**
-!output/coverage-js
-
-*.html
-!src/**/assets/*.html
-!output/coverage-js/**/*.html
-
-!output/coverage-js/**
+# =============================================================================
+# Coverage badges (optional)
+# CI on main may commit coverage.svg / js-coverage.svg for README badges.
+# Uncomment the next lines if you want to stop tracking regenerated badges:
+# /coverage.svg
+# /js-coverage.svg

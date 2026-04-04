@@ -93,7 +93,7 @@ def test_date_parsing_and_years_extraction(page: Page, generated_report):
     """
     page.goto(generated_report)
     
-    year_select = page.locator(".control-group", has_text="Année").locator("select")
+    year_select = page.locator('select[data-testid="widget-year-select"]').first
     
     # On vérifie les options disponibles
     options = year_select.locator("option").all_inner_texts()

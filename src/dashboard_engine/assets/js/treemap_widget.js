@@ -1,6 +1,17 @@
-// ==========================================
-// NESTED TREEMAP WIDGET (SYNC OR HIDE)
-// ==========================================
+const TREEMAP_CONSTANTS = {
+    DEFAULT_VIEW_WIDTH: 600,
+    DEFAULT_VIEW_HEIGHT: 500,
+    PADDING_OUTER: 3,
+    PADDING_INNER: 1,
+};
+
+function renderTreemapSubChartShellHtml(label, suffix) {
+    return `
+                <h4 style="text-align:center; margin: 0 0 10px 0; min-height: 20px; cursor: pointer;" title="Cliquez pour dézoomer">${label}${suffix}</h4>
+                <div class="treemap-container" style="flex: 1; min-height: 0; position:relative; overflow:hidden;"></div>
+            `;
+}
+
 class NestedTreemapWidget extends BaseWidget {
 
     initLayout() {
@@ -21,7 +32,7 @@ class NestedTreemapWidget extends BaseWidget {
             this.broadcastZoom(['Total']);
         });
 
-        this.colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+        this.colorScale = d3.scaleOrdinal(UI_THEME.schemeCategory10);
         this.charts = {}; 
     }
 
@@ -46,10 +57,7 @@ class NestedTreemapWidget extends BaseWidget {
             const label = Utils.labelForPeriod(this.state.periodType, year, this.state.periodValue);
             const suffix = (this.state.yoy && year === this.state.year) ? ' (N)' : (this.state.yoy ? ' (N-1)' : '');
 
-            container.innerHTML = `
-                <h4 style="text-align:center; margin: 0 0 10px 0; min-height: 20px; cursor: pointer;" title="Cliquez pour dézoomer">${label}${suffix}</h4>
-                <div class="treemap-container" style="flex: 1; min-height: 0; position:relative; overflow:hidden;"></div>
-            `;
+            container.innerHTML = renderTreemapSubChartShellHtml(label, suffix);
             
             this.vizWrapper.appendChild(container);
             
@@ -60,20 +68,7 @@ class NestedTreemapWidget extends BaseWidget {
                 return;
             }
 
-            const { hierarchy: hierarchyCols, value } = this.config.mapping;
-            const rolls = d3.rollup(rawData, 
-                v => d3.sum(v, d => +d[value]), 
-                ...hierarchyCols.map(col => d => d[col] || "N/A")
-            );
-
-            const makeTree = (name, val) => {
-                if (val instanceof Map) return { name, children: Array.from(val, ([n, v]) => makeTree(n, v)) };
-                return { name, value: val }; 
-            };
-
-            const fullRoot = d3.hierarchy(makeTree("Total", rolls))
-                .sum(d => d.value)
-                .sort((a, b) => b.value - a.value);
+            const fullRoot = this.buildHierarchy(rawData);
 
             this.charts[year] = {
                 fullRoot: fullRoot, 
@@ -86,8 +81,29 @@ class NestedTreemapWidget extends BaseWidget {
     }
 
     showNoData(domNode) {
-        domNode.innerHTML = 
-            '<div style="height:100%; display:flex; align-items:center; justify-content:center; background:#f9f9f9; color:#999; font-style:italic;">No data available for this selection</div>';
+        domNode.innerHTML =
+            `<div style="height:100%; display:flex; align-items:center; justify-content:center; background:${UI_THEME.emptyStatePanelBg}; color:${UI_THEME.emptyStateMutedText}; font-style:italic;">No data available for this selection</div>`;
+    }
+
+    /**
+     * Build hierarchical data for the treemap based on the mapping configuration.
+     * Pure computation to facilitate table-driven testing.
+     */
+    buildHierarchy(rawData) {
+        const { hierarchy: hierarchyCols, value } = this.config.mapping;
+        const rolls = d3.rollup(rawData, 
+            v => d3.sum(v, d => +d[value]), 
+            ...hierarchyCols.map(col => d => d[col] || "N/A")
+        );
+
+        const makeTree = (name, val) => {
+            if (val instanceof Map) return { name, children: Array.from(val, ([n, v]) => makeTree(n, v)) };
+            return { name, value: val }; 
+        };
+
+        return d3.hierarchy(makeTree("Total", rolls))
+            .sum(d => d.value)
+            .sort((a, b) => b.value - a.value);
     }
 
     renderChart(year, sourceNode, breadcrumbPath) {
@@ -95,8 +111,8 @@ class NestedTreemapWidget extends BaseWidget {
         if (!chartInfo) return;
 
         const { domNode } = chartInfo;
-        const width = 600; 
-        const height = 500; 
+        const width = TREEMAP_CONSTANTS.DEFAULT_VIEW_WIDTH;
+        const height = TREEMAP_CONSTANTS.DEFAULT_VIEW_HEIGHT; 
         const uid = `chart-${year}`; 
         const formatNum = Utils.fmtNumber;
 
@@ -108,8 +124,8 @@ class NestedTreemapWidget extends BaseWidget {
 
         const treemap = d3.treemap()
             .size([width, height])
-            .paddingOuter(3)
-            .paddingInner(1)
+            .paddingOuter(TREEMAP_CONSTANTS.PADDING_OUTER)
+            .paddingInner(TREEMAP_CONSTANTS.PADDING_INNER)
             .round(true);
 
         treemap.paddingTop(d => d === renderRoot ? 0 : 18)(renderRoot);
@@ -156,7 +172,7 @@ class NestedTreemapWidget extends BaseWidget {
                 return this.colorScale(d.data.name);
             })
             .attr("fill-opacity", d => d.children ? 0.6 : 0.8) 
-            .attr("stroke", "#fff")
+            .attr("stroke", UI_THEME.white)
             .style("cursor", d => d.children ? "pointer" : "default")
             .on("click", (e, d) => {
                 if (!d.children) return; 
