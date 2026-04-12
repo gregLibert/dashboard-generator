@@ -104,6 +104,11 @@ def test_directed_chord_svg_contains_arcs_and_ribbons(page: Page, chord_report_s
     expect(arcs.first).to_be_visible()
     assert ribbons.count() >= 1
     assert arcs.count() >= 1
+
+    labels = page.locator("text.directed-chord-group-label")
+    expect(labels.first).to_be_visible()
+    assert labels.count() == arcs.count()
+
     page.pause()
 
 

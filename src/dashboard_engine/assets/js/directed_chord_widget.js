@@ -6,6 +6,31 @@ const DIRECTED_CHORD_CONSTANTS = {
     RIBBON_FOCUS_OPACITY: 0.85,
     ARC_DIM_OPACITY: 0.35,
     ARC_FOCUS_OPACITY: 1,
+    /** Very fine outer ring (group sectors). */
+    ARC_THICKNESS_MIN: 3,
+    ARC_THICKNESS_MAX: 5,
+    ARC_THICKNESS_OUTER_FRAC: 0.02,
+    /** Source ribbon hugs outer rim (slightly inset). */
+    RIBBON_SOURCE_RIM_INSET: 1.25,
+    /**
+     * D3 ribbonArrow draws the tip ON targetRadius (tr). If tr ≥ innerRadius, the tip sits inside
+     * the coloured annulus and overlaps the arc. Keep tr strictly inside the central void:
+     * tr ≤ innerRadius - TIP_RADIAL_CLEAR so a visible air gap separates tip from inner rim.
+     */
+    TIP_RADIAL_CLEAR_MIN: 4,
+    TIP_RADIAL_CLEAR_MAX: 12,
+    /**
+     * Arrowhead hr (wing base at tr − hr): small shallow head reads as one with the ribbon body.
+     */
+    ARROW_HEAD_RADIUS_MAX: 2.75,
+    ARROW_HEAD_RADIUS_FRAC: 0.16,
+    /** Minimum tr and tr − hr so the path stays valid. */
+    TARGET_RADIUS_FLOOR_FRAC: 0.06,
+    /** Label outside the ring. */
+    LABEL_RADIUS_OFFSET: 14,
+    LABEL_FONT_PX: 11,
+    LABEL_STROKE: '#fff',
+    LABEL_STROKE_WIDTH: 2.5,
 };
 
 /**
@@ -140,7 +165,30 @@ class DirectedChordWidget extends BaseWidget {
         const width = this.vizWrapper.clientWidth || L.DEFAULT_INNER_WIDTH;
         const height = Math.min(L.STANDARD_PLOT_HEIGHT, width * 0.85);
         const outerRadius = Math.min(width, height) * 0.42;
-        const innerRadius = outerRadius - 22;
+        const arcThickness = Math.max(
+            DIRECTED_CHORD_CONSTANTS.ARC_THICKNESS_MIN,
+            Math.min(
+                DIRECTED_CHORD_CONSTANTS.ARC_THICKNESS_MAX,
+                outerRadius * DIRECTED_CHORD_CONSTANTS.ARC_THICKNESS_OUTER_FRAC
+            )
+        );
+        const innerRadius = outerRadius - arcThickness;
+        const ribbonSourceR = outerRadius - DIRECTED_CHORD_CONSTANTS.RIBBON_SOURCE_RIM_INSET;
+        const tipClear = Math.min(
+            DIRECTED_CHORD_CONSTANTS.TIP_RADIAL_CLEAR_MAX,
+            Math.max(
+                DIRECTED_CHORD_CONSTANTS.TIP_RADIAL_CLEAR_MIN,
+                outerRadius * 0.026
+            )
+        );
+        const targetFloor = outerRadius * DIRECTED_CHORD_CONSTANTS.TARGET_RADIUS_FLOOR_FRAC;
+        /** Tip strictly inside the donut hole: no overlap with group fill [innerRadius, outerRadius]. */
+        const ribbonTargetR = Math.max(targetFloor, innerRadius - tipClear);
+        const headRadius = Math.min(
+            DIRECTED_CHORD_CONSTANTS.ARROW_HEAD_RADIUS_MAX,
+            arcThickness * DIRECTED_CHORD_CONSTANTS.ARROW_HEAD_RADIUS_FRAC,
+            Math.max(0, ribbonTargetR - 0.5)
+        );
 
         const wrap = document.createElement('div');
         wrap.className = 'sub-chart';
@@ -164,32 +212,12 @@ class DirectedChordWidget extends BaseWidget {
 
         const ribbon = d3
             .ribbonArrow()
-            .radius(outerRadius - 2)
-            .padAngle(1 / outerRadius);
+            .sourceRadius(() => ribbonSourceR)
+            .targetRadius(() => ribbonTargetR)
+            .headRadius(() => headRadius)
+            .padAngle(Math.min(0.028, 0.65 / outerRadius));
 
         const gMain = svg.append('g').attr('class', 'directed-chord-root');
-
-        const gRibbons = gMain.append('g').attr('class', 'directed-chord-ribbons').attr('fill-opacity', DIRECTED_CHORD_CONSTANTS.RIBBON_FOCUS_OPACITY);
-
-        const ribbonPaths = gRibbons
-            .selectAll('path')
-            .data(chords)
-            .join('path')
-            .attr('class', 'directed-chord-ribbon')
-            .attr('fill', (d) => color(labels[d.source.index]))
-            .attr('stroke', UI_THEME.white)
-            .attr('stroke-width', 0.35)
-            .attr('data-source-index', (d) => d.source.index)
-            .attr('data-target-index', (d) => d.target.index)
-            .attr('d', ribbon)
-            .each(function (d) {
-                const sName = labels[d.source.index];
-                const tName = labels[d.target.index];
-                const v = matrix[d.source.index][d.target.index];
-                d3.select(this)
-                    .append('title')
-                    .text(`Flux: ${sName} → ${tName}\nVolume: ${Utils.fmtNumber.format(v)}`);
-            });
 
         const gArcs = gMain.append('g').attr('class', 'directed-chord-arcs');
 
@@ -220,6 +248,30 @@ class DirectedChordWidget extends BaseWidget {
                     .text(
                         `${labels[idx]}\nSortant (Σ): ${Utils.fmtNumber.format(outflow)}\nEntrant (Σ): ${Utils.fmtNumber.format(inflow)}`
                     );
+            });
+
+        const gRibbons = gMain
+            .append('g')
+            .attr('class', 'directed-chord-ribbons')
+            .attr('fill-opacity', DIRECTED_CHORD_CONSTANTS.RIBBON_FOCUS_OPACITY);
+
+        const ribbonPaths = gRibbons
+            .selectAll('path')
+            .data(chords)
+            .join('path')
+            .attr('class', 'directed-chord-ribbon')
+            .attr('fill', (d) => color(labels[d.source.index]))
+            .attr('stroke', 'none')
+            .attr('data-source-index', (d) => d.source.index)
+            .attr('data-target-index', (d) => d.target.index)
+            .attr('d', ribbon)
+            .each(function (d) {
+                const sName = labels[d.source.index];
+                const tName = labels[d.target.index];
+                const v = matrix[d.source.index][d.target.index];
+                d3.select(this)
+                    .append('title')
+                    .text(`Flux: ${sName} → ${tName}\nVolume: ${Utils.fmtNumber.format(v)}`);
             });
 
         const resetHighlight = () => {
@@ -253,5 +305,32 @@ class DirectedChordWidget extends BaseWidget {
                 arcPaths.attr('fill-opacity', (a) => (a.index === si || a.index === ti ? DIRECTED_CHORD_CONSTANTS.ARC_FOCUS_OPACITY : DIRECTED_CHORD_CONSTANTS.ARC_DIM_OPACITY));
             })
             .on('mouseleave', resetHighlight);
+
+        const labelR = outerRadius + DIRECTED_CHORD_CONSTANTS.LABEL_RADIUS_OFFSET;
+        const gLabels = gMain.append('g').attr('class', 'directed-chord-labels');
+        gLabels
+            .selectAll('text')
+            .data(chords.groups)
+            .join('text')
+            .attr('class', 'directed-chord-group-label')
+            .attr('data-group-index', (d) => d.index)
+            .attr('dy', '0.35em')
+            .attr('text-anchor', 'middle')
+            .attr('font-size', `${DIRECTED_CHORD_CONSTANTS.LABEL_FONT_PX}px`)
+            .attr('font-weight', '500')
+            .attr('fill', UI_THEME.textMuted)
+            .attr('stroke', DIRECTED_CHORD_CONSTANTS.LABEL_STROKE)
+            .attr('stroke-width', DIRECTED_CHORD_CONSTANTS.LABEL_STROKE_WIDTH)
+            .attr('paint-order', 'stroke fill')
+            .style('pointer-events', 'none')
+            .text((d) => labels[d.index])
+            .attr('transform', (d) => {
+                const a = (d.startAngle + d.endAngle) / 2;
+                const x = labelR * Math.sin(a);
+                const y = -labelR * Math.cos(a);
+                const deg = (a * 180) / Math.PI;
+                const upsideDown = deg > 90 && deg < 270;
+                return `translate(${x},${y}) rotate(${upsideDown ? deg + 180 : deg})`;
+            });
     }
 }
