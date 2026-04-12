@@ -109,8 +109,6 @@ def test_directed_chord_svg_contains_arcs_and_ribbons(page: Page, chord_report_s
     expect(labels.first).to_be_visible()
     assert labels.count() == arcs.count()
 
-    page.pause()
-
 
 def test_directed_chord_summable_false_hides_period_controls(page: Page, chord_report_not_summable):
     """When options.summable is false, period type/value controls are hidden (CSS)."""
@@ -122,4 +120,3 @@ def test_directed_chord_summable_false_hides_period_controls(page: Page, chord_r
 
     svg = chart.locator("svg.directed-chord-svg")
     expect(svg).to_be_visible()
-    page.pause()
