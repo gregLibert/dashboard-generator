@@ -63,6 +63,8 @@ function resolveWidgetClass(type) {
             return HeatmapWidget;
         case 'radial_area':
             return RadialAreaWidget;
+        case 'directed_chord':
+            return DirectedChordWidget;
         default:
             return undefined;
     }

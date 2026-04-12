@@ -27,7 +27,7 @@ This project is intentionally small and opinionated:
 
 - **Frontend / D3 widgets (ES Modules)**
   - Inlined as a single `type="module"` script. The generator **does not** embed every widget file by default: it always includes `utils.js`, `base_widget.js`, and `main.js`, then appends only the JS modules required by the widget types declared in `config["widgets"]`. The `d3-sankey` CDN import is prepended only when a Sankey or Financial Sankey widget is present.
-  - Concrete widget modules (see mapping table below): `sankey_widget.js`, `financial_sankey_widget.js`, `sunburst_widget.js`, `treemap_widget.js` (nested treemap), `evolution_widget.js`, `horizon_widget.js`, `stacked_area_widget.js`, `bubble_widget.js`, `heatmap_widget.js`, `radial_area_widget.js`.
+  - Concrete widget modules (see mapping table below): `sankey_widget.js`, `financial_sankey_widget.js`, `sunburst_widget.js`, `treemap_widget.js` (nested treemap), `evolution_widget.js`, `horizon_widget.js`, `stacked_area_widget.js`, `bubble_widget.js`, `heatmap_widget.js`, `radial_area_widget.js`, `directed_chord_widget.js`.
   - `assets/js/main.js` bootstraps the dashboard: async-loads embedded datasets (plain or gzip+base64), parses config, instantiates widgets.
 
 - **Templates**
@@ -56,6 +56,7 @@ This project is intentionally small and opinionated:
 | `bubble` | `js/bubble_widget.js` |
 | `heatmap` | `js/heatmap_widget.js` |
 | `radial_area` | `js/radial_area_widget.js` |
+| `directed_chord` | `js/directed_chord_widget.js` |
 
 Authoritative mapping: `WIDGET_TYPE_TO_JS_FILE` in `src/dashboard_engine/generator.py`.
 
@@ -211,6 +212,35 @@ Ridgeline/Horizon chart for high-density time-series analysis (e.g., server load
   }
 }
 
+```
+
+### Directed chord (`directed_chord`)
+
+Directed chord diagram (`d3.chordDirected` + `d3.ribbonArrow`) for flows from a **source** category to a **target** category. Rows are aggregated into a square matrix keyed by unique names.
+
+**Mapping:** `date` (for year/month filtering, same as other widgets), `source`, `target`, `value`.
+
+**Options:**
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `summable` | `true` | When `true`, month / quarter / semester filters apply and data is filtered with `getFilteredData`. When `false`, period type and period value controls are hidden and the matrix uses **all rows for the selected calendar year** (no sub-period slice). YoY is always off for this widget. |
+
+```json
+{
+  "type": "directed_chord",
+  "title": "Family transitions",
+  "datasetIndex": 0,
+  "mapping": {
+    "date": "mois_annee",
+    "source": "famille_source",
+    "target": "famille_cible",
+    "value": "volume"
+  },
+  "options": {
+    "summable": true
+  }
+}
 ```
 
 ## 3. Usage (Python 2.7 Pseudo-Code)

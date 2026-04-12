@@ -1,0 +1,2 @@
+# Forcer LF pour tous les fichiers texte afin d'éviter les bugs en CI Linux
+* text=auto eol=lf

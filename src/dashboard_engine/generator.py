@@ -35,6 +35,7 @@ WIDGET_TYPE_TO_JS_FILE = {
     "bubble": "js/bubble_widget.js",
     "heatmap": "js/heatmap_widget.js",
     "radial_area": "js/radial_area_widget.js",
+    "directed_chord": "js/directed_chord_widget.js",
 }
 
 WIDGET_TYPES_USING_D3_SANKEY = frozenset({"sankey", "financial_sankey"})
