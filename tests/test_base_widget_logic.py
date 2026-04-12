@@ -52,7 +52,7 @@ def generated_report(csv_data_file):
     }
 
     generator = DashboardGenerator()
-    html_content = generator.generate(config, [csv_content])
+    html_content = generator.generate(config, [csv_content], js_bundle_mode="full")
 
     os.makedirs(output_dir, exist_ok=True)
     with open(output_report, "w", encoding="utf-8") as f:

@@ -164,6 +164,13 @@ class DashboardGenerator(object):
         ordered = list(JS_MANDATORY_PATHS) + widget_paths + [JS_MAIN_PATH]
         return ordered, need_sankey
 
+    @classmethod
+    def collect_js_asset_paths_full_bundle(cls):
+        """All widget modules + d3-sankey import (stable bundle size for V8 coverage on E2E HTML)."""
+        widget_paths = sorted(WIDGET_TYPE_TO_JS_FILE.values())
+        ordered = list(JS_MANDATORY_PATHS) + widget_paths + [JS_MAIN_PATH]
+        return ordered, True
+
     def _build_js_content(self, js_files, include_d3_sankey):
         """Concatenate JS assets and prepend D3 (+ optional d3-sankey) imports."""
         js_content_parts = [D3_CDN_IMPORT]
@@ -196,18 +203,34 @@ class DashboardGenerator(object):
             normalize_dataset_for_template(ds, compress_data) for ds in datasets_list
         ]
 
-    def generate(self, config, datasets_list, compress_data=False):
+    def generate(
+        self,
+        config,
+        datasets_list,
+        compress_data=False,
+        js_bundle_mode="auto",
+    ):
         """Generate a standalone HTML dashboard.
 
         :param config: dashboard configuration dictionary.
         :param datasets_list: list of CSV strings used by the widgets.
         :param compress_data: if True, gzip-compress each CSV (stdlib) and embed as base64;
             the client decompresses with DecompressionStream('gzip') before d3.csvParse.
+        :param js_bundle_mode: ``\"auto\"`` (default) inlines only mandatory JS plus widgets
+            declared in ``config``. ``\"full\"`` inlines every widget module and d3-sankey so
+            Playwright-generated HTML matches a stable bundle shape for V8 coverage tooling.
         :return: rendered HTML string.
         """
         self._validate_inputs(config, datasets_list)
 
-        js_files, include_d3_sankey = self.collect_js_asset_paths(config)
+        if js_bundle_mode not in ("auto", "full"):
+            raise ValueError(
+                "js_bundle_mode must be 'auto' or 'full', not {!r}".format(js_bundle_mode)
+            )
+        if js_bundle_mode == "full":
+            js_files, include_d3_sankey = self.collect_js_asset_paths_full_bundle()
+        else:
+            js_files, include_d3_sankey = self.collect_js_asset_paths(config)
         css_content = self._read_asset("style.css")
         js_content = self._build_js_content(js_files, include_d3_sankey)
 

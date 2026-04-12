@@ -98,7 +98,7 @@ def _write_heatmap_report(scenario_id: str, csv_content: str) -> str:
     output_report = os.path.join(output_dir, f"_test_heatmap_{scenario_id}.html")
     config = {"title": "QA Heatmap", "widgets": [_HEATMAP_WIDGET_CONFIG]}
     generator = DashboardGenerator()
-    html_content = generator.generate(config, [csv_content])
+    html_content = generator.generate(config, [csv_content], js_bundle_mode="full")
     os.makedirs(output_dir, exist_ok=True)
     with open(output_report, "w", encoding="utf-8") as f:
         f.write(html_content)

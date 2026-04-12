@@ -53,6 +53,19 @@ if (testFunc) {
     console.log(`\nTesting function: "${testFunc.functionName}"`);
     console.log(`V8 offsets:       [${start}, ${end}]`);
 
+    const match = /<script[^>]*type="module"[^>]*>([\s\S]*?)<\/script>/.exec(contentStr);
+    const jsContent = match[1];
+
+    console.log('\n--- VRAI TEST 1 : V8 Offset sur JS brut (CRLF) ---');
+    const extractJS_CRLF = jsContent.substring(start, Math.min(end, start + 50));
+    console.log(`[Slice] : "${extractJS_CRLF.replace(/\n/g, '\\n').replace(/\r/g, '\\r')}..."`);
+
+    console.log('\n--- VRAI TEST 2 : V8 Offset sur JS normalisé par le navigateur (LF) ---');
+    const jsContentLF = jsContent.replace(/\r\n/g, '\n'); // LA CORRECTION EST ICI
+    const extractJS_LF = jsContentLF.substring(start, Math.min(end, start + 50));
+    console.log(`[Slice] : "${extractJS_LF.replace(/\n/g, '\\n').replace(/\r/g, '\\r')}..."`);
+    
+    
     console.log('\n--- Hypothesis 1: V8 uses byte offsets (buffer) ---');
     const extractBuf = contentBuf
         .subarray(start, Math.min(end, start + CONSTANTS.PREVIEW_SLICE_LEN))

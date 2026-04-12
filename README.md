@@ -21,7 +21,7 @@ This project is a lightweight, serverless dashboard engine designed to generate 
 This project is intentionally small and opinionated:
 
 - **Python core (`dashboard_engine.generator.DashboardGenerator`)**
-  - Single entrypoint: `generate(config, datasets_list, compress_data=False)` (see below).
+  - Single entrypoint: `generate(config, datasets_list, compress_data=False, js_bundle_mode="auto")` (see below).
   - Loads static assets (CSS/JS) from `src/dashboard_engine/assets/`.
   - Renders a Jinja2 `skeleton.html` template into a standalone HTML file.
 
@@ -41,6 +41,7 @@ This project is intentionally small and opinionated:
 | `config` | — | Dashboard configuration dict (`title`, `widgets`, …). |
 | `datasets_list` | — | List of CSV strings (UTF-8 text), one per embedded dataset. |
 | `compress_data` | `False` | If `True`, each CSV is gzip-compressed with the standard library, then Base64-encoded. The template sets `data-csv-encoding="gzip-base64"` on the dataset `<script>` tags; the client uses `DecompressionStream('gzip')` before `d3.csvParse`. If `False`, behaviour matches earlier releases (plain CSV text in the page). |
+| `js_bundle_mode` | `"auto"` | `"auto"` inlines only mandatory JS plus modules for widgets in `config`. `"full"` inlines every widget file and d3-sankey (stable bundle for browser/V8 coverage); use this when generating HTML consumed by Playwright in this repo’s tests. |
 
 **Widget type → JS module** (unknown `type` in `config["widgets"]` raises `ValueError`):
 

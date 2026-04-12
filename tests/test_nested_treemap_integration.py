@@ -67,7 +67,7 @@ def treemap_report(csv_treemap_data):
     }
 
     generator = DashboardGenerator()
-    html = generator.generate(config, [csv_raw])
+    html = generator.generate(config, [csv_raw], js_bundle_mode="full")
     
     os.makedirs(output_dir, exist_ok=True)
     with open(report_path, "w", encoding="utf-8") as f:

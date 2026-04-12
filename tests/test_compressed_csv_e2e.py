@@ -38,7 +38,9 @@ def test_bubble_dashboard_renders_with_compression_toggle(
         ],
     }
     gen = DashboardGenerator()
-    html = gen.generate(config, [csv_content], compress_data=compress_data)
+    html = gen.generate(
+        config, [csv_content], compress_data=compress_data, js_bundle_mode="full"
+    )
     out = tmp_path / "dash.html"
     out.write_text(html, encoding="utf-8")
     page.goto(out.as_uri())

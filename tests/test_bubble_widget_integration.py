@@ -103,7 +103,7 @@ def _write_bubble_report(scenario_id: str, csv_content: str) -> str:
         "widgets": [_BUBBLE_WIDGET_CONFIG],
     }
     generator = DashboardGenerator()
-    html_content = generator.generate(config, [csv_content])
+    html_content = generator.generate(config, [csv_content], js_bundle_mode="full")
     os.makedirs(output_dir, exist_ok=True)
     with open(output_report, "w", encoding="utf-8") as f:
         f.write(html_content)
