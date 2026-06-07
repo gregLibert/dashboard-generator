@@ -2,13 +2,37 @@ import json
 import os
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 from playwright.sync_api import Page
 
+PLAYWRIGHT_NAV_TIMEOUT_MS = 60_000
+
 
 def pytest_configure(config):
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
+
+def path_to_file_url(path: str) -> str:
+    """Stable file:// URI on Linux and Windows (avoids file://// double-slash bugs)."""
+    return Path(path).resolve().as_uri()
+
+
+@pytest.fixture(scope="function", autouse=True)
+def playwright_navigation_defaults(page: Page):
+    """file:// dashboards load D3 from CDN; wait for DOM, not full network load."""
+    page.set_default_navigation_timeout(PLAYWRIGHT_NAV_TIMEOUT_MS)
+    page.set_default_timeout(30_000)
+    original_goto = page.goto
+
+    def goto(url: str, **kwargs):
+        kwargs.setdefault("wait_until", "domcontentloaded")
+        kwargs.setdefault("timeout", PLAYWRIGHT_NAV_TIMEOUT_MS)
+        return original_goto(url, **kwargs)
+
+    page.goto = goto
+    yield
 
 
 @pytest.fixture(scope="session")

@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -107,7 +108,7 @@ def _write_bubble_report(scenario_id: str, csv_content: str) -> str:
     os.makedirs(output_dir, exist_ok=True)
     with open(output_report, "w", encoding="utf-8") as f:
         f.write(html_content)
-    return "file:///{path}".format(path=output_report.replace(os.sep, "/"))
+    return Path(output_report).resolve().as_uri()
 
 
 @pytest.fixture(scope="module")
