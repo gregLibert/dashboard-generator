@@ -65,6 +65,8 @@ function resolveWidgetClass(type) {
             return RadialAreaWidget;
         case 'directed_chord':
             return DirectedChordWidget;
+        case 'ribbon_chart':
+            return RibbonChartWidget;
         default:
             return undefined;
     }

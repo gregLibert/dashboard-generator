@@ -27,7 +27,7 @@ This project is intentionally small and opinionated:
 
 - **Frontend / D3 widgets (ES Modules)**
   - Inlined as a single `type="module"` script. The generator **does not** embed every widget file by default: it always includes `utils.js`, `base_widget.js`, and `main.js`, then appends only the JS modules required by the widget types declared in `config["widgets"]`. The `d3-sankey` CDN import is prepended only when a Sankey or Financial Sankey widget is present.
-  - Concrete widget modules (see mapping table below): `sankey_widget.js`, `financial_sankey_widget.js`, `sunburst_widget.js`, `treemap_widget.js` (nested treemap), `evolution_widget.js`, `horizon_widget.js`, `stacked_area_widget.js`, `bubble_widget.js`, `heatmap_widget.js`, `radial_area_widget.js`, `directed_chord_widget.js`.
+  - Concrete widget modules (see mapping table below): `sankey_widget.js`, `financial_sankey_widget.js`, `sunburst_widget.js`, `treemap_widget.js` (nested treemap), `evolution_widget.js`, `horizon_widget.js`, `stacked_area_widget.js`, `bubble_widget.js`, `heatmap_widget.js`, `radial_area_widget.js`, `directed_chord_widget.js`, `ribbon_chart_widget.js`.
   - `assets/js/main.js` bootstraps the dashboard: async-loads embedded datasets (plain or gzip+base64), parses config, instantiates widgets.
 
 - **Templates**
@@ -58,6 +58,7 @@ This project is intentionally small and opinionated:
 | `heatmap` | `js/heatmap_widget.js` |
 | `radial_area` | `js/radial_area_widget.js` |
 | `directed_chord` | `js/directed_chord_widget.js` |
+| `ribbon_chart` | `js/ribbon_chart_widget.js` |
 
 Authoritative mapping: `WIDGET_TYPE_TO_JS_FILE` in `src/dashboard_engine/generator.py`.
 
@@ -213,6 +214,27 @@ Ridgeline/Horizon chart for high-density time-series analysis (e.g., server load
   }
 }
 
+```
+
+### Ribbon chart (`ribbon_chart`)
+
+Alluvial-style ribbon chart: stacked **column nodes** at each time step (with value labels) connected by smooth semi-transparent **flow ribbons** (`d3.link` + `d3.curveBumpX`) between adjacent steps. Category order is re-ranked per column (largest segment on top).
+
+**Controls:** **Année** selects the calendar year. **Vue** (`mois`, `trimestre`, `semestre`, `annee`) sets the **X-axis granularity** (period value is hidden; the full selected year is always shown). Optional **N-1** adds a second panel for the prior year.
+
+**Mapping:** `date` (`YYYY-MM`), `value`, `category`.
+
+```json
+{
+  "type": "ribbon_chart",
+  "title": "Composition par période",
+  "datasetIndex": 0,
+  "mapping": {
+    "date": "mois_annee",
+    "value": "amount",
+    "category": "category"
+  }
+}
 ```
 
 ### Directed chord (`directed_chord`)
